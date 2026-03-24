@@ -43,6 +43,21 @@ st.set_page_config(
     layout="wide",
 )
 
+# === 비밀번호 잠금 ===
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.markdown("#### 🔒 로그인")
+    pw = st.text_input("비밀번호", type="password")
+    if st.button("로그인"):
+        if pw == st.secrets.get("APP_PASSWORD", ""):
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("비밀번호가 틀렸습니다.")
+    st.stop()
+
 st.markdown("#### 개인 테스트 프로그램 만들기")
 
 # 오늘 예정된 주제 알림
