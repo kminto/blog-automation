@@ -446,10 +446,16 @@ def _render_place_detail():
     regions = st.text_input("지역 (쉼표 구분)", value=", ".join(auto_regions), key="input_regions")
     menus = st.text_input("대표 메뉴 (쉼표 구분)", value=", ".join(auto_menus[:5]), key="input_menus")
     ordered_menus = st.text_area(
-        "🍽 내가 주문한 메뉴 (줄바꿈으로 구분, 메뉴명 + 한줄 설명)",
-        placeholder="예:\nA코스 - 육사시미+고기4종+꼬리구이+솥밥\n생맥주 - 시원하게 한잔\n마파두부 - 사이드로 시킴",
+        "🍽 내가 주문한 메뉴 (줄바꿈, 메뉴명 - 내 한줄평)",
+        placeholder="예:\nA코스 - 육사시미가 입에서 녹았음, 막창은 좀 질겼음\n생맥주 - 고기랑 찰떡, 2잔 마심\n묵은지찌개 - 국물이 진해서 밥 말아먹음",
         height=120,
         key="input_ordered",
+    )
+    my_review = st.text_area(
+        "📝 내 솔직 후기 (짧게 적으면 이걸 중심으로 글이 작성돼요)",
+        placeholder="예:\n친구가 추천해서 갔는데 생각보다 좋았음\n고기 퀄리티는 좋은데 소스가 좀 아쉬움\n막창은 다음에 안 시킬듯 ㅋㅋ\n솥밥은 진짜 맛있어서 하나 더 시킬뻔\n주차 편하고 분위기 조용해서 데이트하기 좋을듯\n가격은 좀 있지만 특별한 날에 올만함",
+        height=150,
+        key="input_my_review",
     )
     companion = st.text_input("방문 인원/동행", placeholder="예: 친구 2명")
     mood = st.text_input("분위기", placeholder="예: 조용함, 가족 분위기")
@@ -485,7 +491,7 @@ def _render_place_detail():
             menu_list = parse_comma_separated(menus)
             _run_blog_generation(
                 info["name"], region_list, menu_list,
-                companion, mood, memo, ordered_menus,
+                companion, mood, memo, ordered_menus, my_review,
             )
 
 
@@ -539,11 +545,14 @@ def _run_blog_generation(
     mood: str,
     memo: str,
     ordered_menus: str = "",
+    my_review: str = "",
 ):
     """블로그 본문을 생성한다."""
     full_memo = memo
     if ordered_menus and ordered_menus.strip():
         full_memo += "\n\n[내가 주문한 메뉴]\n" + ordered_menus.strip()
+    if my_review and my_review.strip():
+        full_memo += "\n\n[내 솔직 후기]\n" + my_review.strip()
 
     with st.spinner("ChatGPT가 블로그 글을 작성하고 있습니다..."):
         result = safe_api_call(

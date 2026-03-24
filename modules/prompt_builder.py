@@ -265,15 +265,49 @@ def build_blog_prompt(
     ordered_section = ""
     if "[내가 주문한 메뉴]" in memo:
         parts = memo.split("[내가 주문한 메뉴]")
+        remaining = parts[1]
+        # [내 솔직 후기]가 있으면 분리
+        if "[내 솔직 후기]" in remaining:
+            menu_part, review_part = remaining.split("[내 솔직 후기]")
+            ordered_lines = menu_part.strip().split("\n")
+            my_review_text = review_part.strip()
+        else:
+            ordered_lines = remaining.strip().split("\n")
+            my_review_text = ""
         memo = parts[0].strip()
-        ordered_lines = parts[1].strip().split("\n")
         ordered_section = _build_ordered_menu_prompt(ordered_lines)
+    elif "[내 솔직 후기]" in memo:
+        parts = memo.split("[내 솔직 후기]")
+        memo = parts[0].strip()
+        my_review_text = parts[1].strip()
+    else:
+        my_review_text = ""
+
     menu_text = ", ".join(menus)
+
+    # 내 후기 프롬프트 구성
+    review_section = ""
+    if my_review_text:
+        review_section = f"""
+## 내 솔직 후기 (가장 중요! 이 내용을 중심으로 글을 작성할 것)
+
+아래는 사용자가 직접 쓴 실제 경험/감상입니다:
+\"\"\"{my_review_text}\"\"\"
+
+위 후기를 반드시 지킬 규칙:
+- 위 내용이 글의 핵심이다. 사용자의 표현과 감상을 최대한 살려서 확장할 것
+- 사용자가 "맛없다", "아쉽다"고 쓰면 그대로 반영 (임의로 좋게 바꾸지 말 것)
+- 사용자가 쓴 표현을 자연스럽게 본문에 녹일 것 (예: "소스가 좀 아쉬움" → "개인적으로 소스가 좀 아쉬웠어요~")
+- 사용자가 언급하지 않은 맛/감상을 지어내지 말 것
+- 사용자 후기에 없는 메뉴는 리뷰하지 말 것
+- 부족한 부분만 분위기/비주얼/식감 묘사로 보충
+"""
 
     style_guide = _build_style_guide()
 
     prompt = f"""당신은 네이버 블로그 맛집 리뷰를 쓰는 20대 후반 여성 블로거입니다.
-아래 정보를 바탕으로 네이버 맛집 블로그 글을 작성해주세요.
+사용자의 실제 후기를 바탕으로 자연스러운 블로그 글로 확장해주세요.
+사용자가 직접 느낀 점을 중심으로, 살을 붙여서 블로그 형태로 만들어주세요.
 
 ## 음식점 정보
 - 음식점 이름: {restaurant_name}
@@ -283,6 +317,7 @@ def build_blog_prompt(
 - 분위기: {mood}
 - 추가 메모: {memo or "없음"}
 {ordered_section}
+{review_section}
 
 ## SEO 키워드 전략 (검색 상위 노출 - 가장 중요한 규칙)
 
