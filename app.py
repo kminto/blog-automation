@@ -353,6 +353,28 @@ def _render_blog_result():
         st.code(sections["hashtags"], language=None)
 
 
+def _build_my_review(
+    vibe: str, cook: str, wait: str, revisit: str,
+    best: str, worst: str, episode: str, free: str,
+) -> str:
+    """분류형 입력을 하나의 후기 텍스트로 조합한다."""
+    parts = []
+    parts.append(f"이 가게 핵심 포인트: {vibe}")
+    if cook != "해당없음":
+        parts.append(f"조리 방식: {cook}")
+    parts.append(f"웨이팅: {wait}")
+    parts.append(f"재방문 의사: {revisit}")
+    if best:
+        parts.append(f"제일 맛있었던 것: {best}")
+    if worst:
+        parts.append(f"아쉬웠던 점: {worst}")
+    if episode:
+        parts.append(f"에피소드: {episode}")
+    if free:
+        parts.append(f"추가: {free}")
+    return "\n".join(parts)
+
+
 def _build_auto_memo(info: dict) -> str:
     """수집된 정보로 자동 메모를 구성한다."""
     parts = []
@@ -451,12 +473,65 @@ def _render_place_detail():
         height=120,
         key="input_ordered",
     )
-    my_review = st.text_area(
-        "📝 내 솔직 후기 (짧게 적으면 이걸 중심으로 글이 작성돼요)",
-        placeholder="예:\n친구가 추천해서 갔는데 생각보다 좋았음\n고기 퀄리티는 좋은데 소스가 좀 아쉬움\n막창은 다음에 안 시킬듯 ㅋㅋ\n솥밥은 진짜 맛있어서 하나 더 시킬뻔\n주차 편하고 분위기 조용해서 데이트하기 좋을듯\n가격은 좀 있지만 특별한 날에 올만함",
-        height=150,
-        key="input_my_review",
+    st.markdown("**📝 내 솔직 후기**")
+
+    # 빠른 선택
+    col_r1, col_r2 = st.columns(2)
+    with col_r1:
+        review_vibe = st.selectbox(
+            "핵심 포인트",
+            ["가성비 좋음", "고급짐/특별한 날", "양 많음", "맛은 좋은데 비쌈",
+             "동네 단골각", "데이트 맛집", "가족모임 적합", "혼밥 가능"],
+            key="review_vibe",
+        )
+        review_cook = st.selectbox(
+            "조리 방식",
+            ["직원이 구워줌", "내가 직접 구움", "이미 조리돼서 나옴",
+             "셰프가 눈앞에서 조리", "셀프바/뷔페", "해당없음"],
+            key="review_cook",
+        )
+    with col_r2:
+        review_wait = st.selectbox(
+            "웨이팅",
+            ["웨이팅 없음", "5~10분 대기", "10~30분 대기",
+             "30분 이상 대기", "예약해서 바로 입장"],
+            key="review_wait",
+        )
+        review_revisit = st.selectbox(
+            "재방문 의사",
+            ["무조건 재방문", "가끔 올만함", "한번은 갈만함",
+             "글쎄.. 다음엔 다른데", "비추"],
+            key="review_revisit",
+        )
+
+    review_best = st.text_input(
+        "제일 맛있었던 메뉴",
+        placeholder="예: 채끝이 미쳤음, 육사시미 녹았음",
+        key="review_best",
     )
+    review_worst = st.text_input(
+        "아쉬웠던 점 (솔직하게)",
+        placeholder="예: 특양 질김, 소스 아쉬움, 양 적음",
+        key="review_worst",
+    )
+    review_episode = st.text_input(
+        "기억나는 에피소드 (선택)",
+        placeholder="예: 옆테이블에서 뭐먹냐고 물어봄 ㅋㅋ, 친구가 감탄함",
+        key="review_episode",
+    )
+    review_free = st.text_area(
+        "추가로 하고싶은 말 (자유)",
+        placeholder="예: 솥밥 하나 더 시킬뻔 ㅋㅋ 가격은 좀 있지만 특별한 날에 갈만함",
+        height=80,
+        key="review_free",
+    )
+
+    # 입력값을 하나의 후기 텍스트로 조합
+    my_review = _build_my_review(
+        review_vibe, review_cook, review_wait, review_revisit,
+        review_best, review_worst, review_episode, review_free,
+    )
+
     companion = st.text_input("방문 인원/동행", placeholder="예: 친구 2명")
     mood = st.text_input("분위기", placeholder="예: 조용함, 가족 분위기")
     memo = st.text_area("추가 메모 (선택)", value=_build_auto_memo(info), key="input_memo")
