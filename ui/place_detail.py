@@ -19,7 +19,8 @@ from utils.api_utils import safe_api_call
 
 
 def render_place_detail(on_analyze, on_generate):
-    """선택된 음식점 상세 정보를 표시하고 간소화된 입력 폼을 렌더링한다."""
+    """선택된 음식점 상세 정보를 표시하고 간소화된 입력 폼을 렌더링한다.
+    on_analyze는 사용하지 않음 (호환성 유지). on_generate가 전체 파이프라인."""
     info = st.session_state.place_detail
 
     st.subheader(f"🏪 {info['name']}")
@@ -156,78 +157,43 @@ def render_place_detail(on_analyze, on_generate):
 
     st.divider()
 
-    # 사진 업로드 + AI 분석
-    with st.expander("📸 사진 업로드 (AI가 자동 분석)", expanded=False):
-        st.caption("촬영 순서: 외관 → 내부 → 메뉴판 → 반찬 → 메인 → 사이드")
-        uploaded = st.file_uploader(
-            "사진 선택 (여러 장 가능)",
-            type=["jpg", "jpeg", "png", "webp"],
-            accept_multiple_files=True,
-            key="photo_upload",
-        )
-
-        if uploaded and st.button("🔍 사진 AI 분석", use_container_width=True, key="btn_photo_analyze"):
-            photo_data = [{"name": f.name, "bytes": f.read()} for f in uploaded]
-            with st.spinner(f"{len(photo_data)}장 분석 중..."):
-                result = safe_api_call(analyze_photos, photo_data)
-            if result["success"]:
-                st.session_state["photo_analysis"] = result["data"]
-                st.success(f"{len(result['data'])}장 분석 완료!")
-                st.rerun()
-            else:
-                st.error(f"사진 분석 실패: {result['error']}")
-
-        if st.session_state.get("photo_analysis"):
-            analysis = st.session_state["photo_analysis"]
-            icons = {"외관": "🏪", "내부": "🪑", "메뉴판": "📋", "세팅": "🥢",
-                     "메인음식": "🍽", "사이드": "🍺", "기타": "📷"}
-            for item in analysis:
-                cat = item.get("category", "기타")
-                food = f" **{item['food_name']}**" if item.get("food_name") else ""
-                st.markdown(f"{icons.get(cat, '📷')} `{cat}`{food} — {item.get('description', '')}")
-
-            if st.button("✨ 분석 결과로 자동 채우기", key="btn_auto_fill"):
-                detected = extract_menus_from_analysis(analysis)
-                desc = extract_descriptions_from_analysis(analysis)
-                if detected:
-                    st.session_state["input_ordered"] = desc
-                    st.session_state["input_menus"] = ", ".join(detected)
-                st.rerun()
+    # 사진 업로드 (선택)
+    st.markdown("**📸 사진 업로드 (선택)**")
+    st.caption("사진 있으면 AI가 자동 분석해서 본문에 반영해요. 없어도 OK!")
+    uploaded = st.file_uploader(
+        "사진 선택 (여러 장 가능)",
+        type=["jpg", "jpeg", "png", "webp"],
+        accept_multiple_files=True,
+        key="photo_upload",
+    )
+    if uploaded:
+        st.caption(f"📸 {len(uploaded)}장 선택됨 → 생성 시 자동 분석됩니다")
 
     with st.expander("📸 촬영 가이드 (참고용)", expanded=False):
         render_photo_section()
 
     st.divider()
 
-    # 액션 버튼
-    col1, col2 = st.columns(2)
-    with col1:
-        btn_analyze = st.button("🔍 키워드 분석", use_container_width=True)
-    with col2:
-        btn_generate = st.button("✍️ 본문 생성", use_container_width=True)
+    # 🚀 원클릭 생성 버튼
+    btn_generate = st.button(
+        "🚀 키워드 분석 + 본문 생성",
+        use_container_width=True,
+        type="primary",
+        key="btn_full_pipeline",
+    )
 
-    if btn_analyze:
+    if btn_generate:
         region_list = parse_comma_separated(regions)
         menu_list = parse_comma_separated(menus)
         if not region_list or not menu_list:
             st.error("지역과 메뉴를 최소 하나씩 입력해주세요.")
         else:
-            on_analyze(region_list, menu_list)
-
-    if btn_generate:
-        if not st.session_state.scored_keywords:
-            st.warning("먼저 키워드 분석을 실행해주세요.")
-        else:
-            region_list = parse_comma_separated(regions)
-            menu_list = parse_comma_separated(menus)
-
             # 확장 결과가 있으면 확장된 내용 사용
             exp = st.session_state.get("expanded_inputs", {})
             final_ordered = exp.get("ordered_menus", ordered_menus)
             final_mood = exp.get("mood", mood)
             final_memo = exp.get("memo", memo)
 
-            # 후기 조합 (확장 + 빠른 선택)
             my_review = build_my_review(
                 review_vibe, review_cook, review_wait, review_revisit,
                 exp.get("best", review_best),
@@ -240,4 +206,5 @@ def render_place_detail(on_analyze, on_generate):
                 info["name"], region_list, menu_list,
                 companion, final_mood, final_memo,
                 final_ordered, my_review,
+                uploaded if uploaded else None,
             )

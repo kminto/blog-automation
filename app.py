@@ -9,7 +9,7 @@ import pandas as pd
 
 from modules.validators import validate_env
 from modules.blog_advisor import get_today_topic
-from modules.pipeline import run_keyword_analysis, run_blog_generation
+from modules.pipeline import run_full_pipeline
 from modules.db import is_db_available, save_draft, load_draft, clear_draft
 from ui.auth import check_authentication
 from ui.search import render_sidebar_search, handle_reset, handle_search, render_search_results
@@ -135,8 +135,8 @@ if st.session_state.search_results and not st.session_state.selected_place:
 # === 선택된 음식점 상세 정보 ===
 if st.session_state.place_detail:
     render_place_detail(
-        on_analyze=run_keyword_analysis,
-        on_generate=run_blog_generation,
+        on_analyze=None,
+        on_generate=run_full_pipeline,
     )
 
 # === 키워드 결과 표시 ===

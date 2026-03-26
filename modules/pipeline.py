@@ -1,6 +1,6 @@
 """
 블로그 생성 파이프라인 모듈
-키워드 분석과 본문 생성의 핵심 로직을 프로그레스 바와 함께 실행한다.
+사진 분석 → 키워드 분석 → 본문 생성을 원클릭으로 실행한다.
 """
 
 import streamlit as st
@@ -14,53 +14,62 @@ from modules.hashtag_generator import generate_hashtags
 from modules.blog_advisor import add_posting_record
 from modules.keyword_cache import get_cached_keywords, save_to_cache, get_cache_stats
 from modules.post_processor import get_ai_score
-from modules.photo_analyzer import build_photo_context
+from modules.photo_analyzer import analyze_photos, build_photo_context, extract_menus_from_analysis
 from utils.api_utils import safe_api_call
 
 
-def run_keyword_analysis(region_list: list[str], menu_list: list[str]):
-    """키워드 분석을 프로그레스 바와 함께 실행한다."""
-    progress = st.progress(0)
-    status = st.status("키워드 분석 시작...", expanded=True)
+def _run_photo_analysis(status, progress, uploaded_photos: list) -> str:
+    """사진 분석 단계. photo_context 문자열을 반환한다."""
+    if not uploaded_photos:
+        return ""
 
-    # 1단계: 키워드 조합 생성 (25%)
-    status.update(label="키워드 조합 생성 중...")
+    status.update(label="📸 사진 AI 분석 중...")
+    photo_data = [{"name": f.name, "bytes": f.read()} for f in uploaded_photos]
+    # 파일 포인터 리셋
+    for f in uploaded_photos:
+        f.seek(0)
+
+    result = safe_api_call(analyze_photos, photo_data)
+    if result["success"]:
+        st.session_state["photo_analysis"] = result["data"]
+        detected = extract_menus_from_analysis(result["data"])
+        status.write(f"📸 {len(result['data'])}장 분석 완료! 인식 메뉴: {', '.join(detected) if detected else '없음'}")
+        progress.progress(15)
+        return build_photo_context(result["data"])
+    else:
+        status.write(f"⚠️ 사진 분석 실패: {result['error']} (메모 기반으로 계속 진행)")
+        progress.progress(15)
+        return ""
+
+
+def _run_keyword_analysis(status, progress, region_list: list[str], menu_list: list[str]):
+    """키워드 분석 단계."""
+    # 키워드 조합 생성
+    status.update(label="🔍 키워드 조합 생성 중...")
     combinations = generate_keyword_combinations(region_list, menu_list)
     combinations = filter_meaningful_keywords(combinations)
-    status.write(f"총 {len(combinations)}개 키워드 조합 생성 완료")
+    status.write(f"키워드 {len(combinations)}개 조합 생성")
     progress.progress(25)
 
-    # 2단계: 캐시 확인 + 네이버 API 조회 (60%)
-    status.update(label="캐시 확인 + API 조회 중...")
+    # 캐시 + API 조회
+    status.update(label="🔍 네이버 API 조회 중...")
     cached_results, missed_keywords = get_cached_keywords(combinations)
-
-    if cached_results:
-        cache_stats = get_cache_stats()
-        status.write(f"캐시 히트: {len(cached_results)}개 / API 필요: {len(missed_keywords)}개 (캐시 {cache_stats['valid']}개 보유)")
-
     keyword_stats = list(cached_results)
 
     if missed_keywords:
-        batch_count = (len(missed_keywords) + 4) // 5
-        status.write(f"네이버 API 배치 조회: {batch_count}개 배치")
         api_result = safe_api_call(fetch_keyword_stats_batch, missed_keywords)
-        if not api_result["success"]:
-            status.update(label="키워드 API 오류", state="error")
-            st.error(f"키워드 API 오류: {api_result['error']}")
-            progress.empty()
-            return
-        new_results = api_result["data"]
-        keyword_stats.extend(new_results)
-        # 캐시에 새 결과 저장
-        save_to_cache(new_results)
-        status.write(f"API 조회 완료: {len(new_results)}개 결과, 캐시 저장 완료")
+        if api_result["success"]:
+            keyword_stats.extend(api_result["data"])
+            save_to_cache(api_result["data"])
+            status.write(f"캐시 {len(cached_results)}개 + API {len(api_result['data'])}개")
+        else:
+            status.write(f"⚠️ API 오류: {api_result['error']}")
     else:
-        status.write("모든 키워드가 캐시에서 로드됨 (API 호출 없음)")
+        status.write(f"캐시에서 {len(cached_results)}개 로드 (API 호출 없음)")
+    progress.progress(45)
 
-    progress.progress(60)
-
-    # 3단계: 트렌드 분석 (80%)
-    status.update(label="검색 트렌드 분석 중...")
+    # 트렌드 분석
+    status.update(label="📈 트렌드 분석 중...")
     top_for_trend = sorted(
         keyword_stats,
         key=lambda x: (
@@ -75,11 +84,10 @@ def run_keyword_analysis(region_list: list[str], menu_list: list[str]):
     if trend_result["success"] and trend_result["data"]:
         for r in trend_result["data"].get("results", []):
             trend_map[r.get("title", "")] = analyze_trend(r.get("data", []))
-    status.write(f"트렌드 분석 완료: {len(trend_map)}개 키워드")
-    progress.progress(80)
+    progress.progress(55)
 
-    # 4단계: 점수 계산 (100%)
-    status.update(label="키워드 점수 계산 중...")
+    # 점수 계산
+    status.update(label="🏆 키워드 점수 계산 중...")
     scored = []
     for kw_data in keyword_stats:
         keyword = kw_data.get("relKeyword", "")
@@ -87,26 +95,17 @@ def run_keyword_analysis(region_list: list[str], menu_list: list[str]):
         scored.append(score_keyword(kw_data, trend))
     ranked = rank_keywords(scored, regions=region_list, menus=menu_list)
     st.session_state.scored_keywords = ranked
-    progress.progress(100)
-
-    status.update(label="키워드 분석 완료!", state="complete")
-    st.success(f"키워드 분석 완료! 상위 {len(ranked)}개 키워드 선별")
+    status.write(f"상위 {len(ranked)}개 키워드 선별 완료")
+    progress.progress(60)
 
 
-def run_blog_generation(
-    restaurant_name: str,
-    region_list: list[str],
-    menu_list: list[str],
-    companion: str,
-    mood: str,
-    memo: str,
-    ordered_menus: str = "",
-    my_review: str = "",
+def _run_blog_generation(
+    status, progress,
+    restaurant_name: str, region_list: list[str], menu_list: list[str],
+    companion: str, mood: str, memo: str,
+    ordered_menus: str, my_review: str, photo_context: str,
 ):
-    """블로그 본문을 프로그레스 바와 함께 생성한다."""
-    progress = st.progress(0)
-    status = st.status("블로그 글 생성 시작...", expanded=True)
-
+    """본문 생성 단계."""
     # 메모 조합
     full_memo = memo
     if ordered_menus and ordered_menus.strip():
@@ -114,15 +113,9 @@ def run_blog_generation(
     if my_review and my_review.strip():
         full_memo += "\n\n[내 솔직 후기]\n" + my_review.strip()
 
-    # 사진 분석 결과가 있으면 프롬프트에 포함
-    photo_context = ""
-    if st.session_state.get("photo_analysis"):
-        photo_context = build_photo_context(st.session_state["photo_analysis"])
-        status.write(f"📸 사진 분석 데이터 {len(st.session_state['photo_analysis'])}장 포함")
-
-    # 1단계: 본문 생성 (50%)
-    status.update(label="ChatGPT가 블로그 글을 작성하고 있습니다...")
-    status.write("gpt-4o 모델로 본문 생성 중... (10~20초 소요)")
+    # 본문 생성
+    status.update(label="✍️ ChatGPT가 블로그 글을 작성 중...")
+    status.write("gpt-4o 모델로 본문 생성 중... (10~20초)")
     result = safe_api_call(
         generate_blog_post,
         restaurant_name=restaurant_name,
@@ -137,19 +130,16 @@ def run_blog_generation(
     if not result["success"]:
         status.update(label="본문 생성 오류", state="error")
         st.error(f"본문 생성 오류: {result['error']}")
-        progress.empty()
-        return
+        return False
+
     st.session_state.blog_result = result["data"]
-    # AI 냄새 점수 표시
     ai_check = get_ai_score(result["data"])
     grade_emoji = {"좋음": "🟢", "보통": "🟡", "개선필요": "🔴"}.get(ai_check["grade"], "⚪")
-    status.write(f"본문 생성 + 후처리 완료! {grade_emoji} AI 감지 점수: {ai_check['score']}점 ({ai_check['grade']})")
-    if ai_check["issues"]:
-        status.write(f"  잔여 이슈: {', '.join(ai_check['issues'])}")
-    progress.progress(50)
+    status.write(f"본문 완료! {grade_emoji} AI 점수: {ai_check['score']}점 ({ai_check['grade']})")
+    progress.progress(85)
 
-    # 2단계: 해시태그 생성 (80%)
-    status.update(label="해시태그 생성 중...")
+    # 해시태그 생성
+    status.update(label="🏷 해시태그 생성 중...")
     hashtag_list = generate_hashtags(
         restaurant_name=restaurant_name,
         regions=region_list,
@@ -158,11 +148,9 @@ def run_blog_generation(
         mood=mood,
     )
     st.session_state.hashtags = hashtag_list
-    status.write(f"해시태그 {len(hashtag_list)}개 생성 완료")
-    progress.progress(80)
+    progress.progress(95)
 
-    # 3단계: 기록 저장 (100%)
-    status.update(label="포스팅 기록 저장 중...")
+    # 기록 저장
     top_kws = [kw["keyword"] for kw in (st.session_state.scored_keywords or [])[:3]]
     add_posting_record(
         restaurant=restaurant_name,
@@ -171,6 +159,44 @@ def run_blog_generation(
         title=restaurant_name,
     )
     progress.progress(100)
+    return True
 
-    status.update(label="블로그 글 생성 완료!", state="complete")
-    st.success("블로그 글 생성 완료!")
+
+def run_full_pipeline(
+    restaurant_name: str,
+    region_list: list[str],
+    menu_list: list[str],
+    companion: str,
+    mood: str,
+    memo: str,
+    ordered_menus: str = "",
+    my_review: str = "",
+    uploaded_photos: list = None,
+):
+    """사진분석 → 키워드분석 → 본문생성 원클릭 파이프라인."""
+    progress = st.progress(0)
+    status = st.status("🚀 블로그 글 생성 시작...", expanded=True)
+
+    has_photos = uploaded_photos and len(uploaded_photos) > 0
+    total_steps = "사진분석 → 키워드분석 → 본문생성" if has_photos else "키워드분석 → 본문생성"
+    status.write(f"진행: {total_steps}")
+
+    # 1. 사진 분석 (있으면)
+    photo_context = _run_photo_analysis(status, progress, uploaded_photos or [])
+
+    # 2. 키워드 분석
+    _run_keyword_analysis(status, progress, region_list, menu_list)
+
+    # 3. 본문 생성
+    success = _run_blog_generation(
+        status, progress,
+        restaurant_name, region_list, menu_list,
+        companion, mood, memo,
+        ordered_menus, my_review, photo_context,
+    )
+
+    if success:
+        status.update(label="🎉 블로그 글 생성 완료!", state="complete")
+        st.success("블로그 글 생성 완료! 아래에서 확인하세요.")
+    else:
+        status.update(label="❌ 생성 실패", state="error")
