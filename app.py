@@ -1,7 +1,6 @@
 """
 맛집 블로그 자동화 시스템 - 메인 Streamlit 앱
-UI 컴포넌트를 조합하여 전체 워크플로우를 오케스트레이션한다.
-Supabase DB로 작성 중인 글 자동 저장/복원.
+여러 음식점 글을 목록으로 관리. 임시저장/불러오기/삭제.
 """
 
 import streamlit as st
@@ -10,9 +9,12 @@ import pandas as pd
 from modules.validators import validate_env
 from modules.blog_advisor import get_today_topic
 from modules.pipeline import run_full_pipeline
-from modules.db import is_db_available, save_draft, load_draft, clear_draft
+from modules.db import (
+    is_db_available, save_draft, load_draft, list_drafts,
+    delete_draft, restore_draft_to_session,
+)
 from ui.auth import check_authentication
-from ui.search import render_sidebar_search, handle_reset, handle_search, render_search_results
+from ui.search import render_sidebar_search, handle_search, render_search_results
 from ui.place_detail import render_place_detail
 from ui.blog_result import render_blog_result
 from ui.advisor import render_advisor_dashboard
@@ -29,23 +31,9 @@ st.set_page_config(
 if not check_authentication():
     st.stop()
 
-st.markdown("#### 개인 테스트 프로그램 만들기")
-
-# === 오늘 예정된 주제 알림 ===
-_today_topic = get_today_topic()
-if _today_topic and not _today_topic.get("done"):
-    st.markdown(
-        f'<div style="background:#fff3cd;border-left:4px solid #ff9800;'
-        f'padding:12px 16px;border-radius:4px;margin-bottom:12px;">'
-        f'📌 <b>오늘의 주제:</b> {_today_topic["topic"]}'
-        f'<br><span style="color:#888;font-size:12px;">'
-        f'어제 정한 주제예요. 아래에서 검색해서 바로 시작하세요!</span></div>',
-        unsafe_allow_html=True,
-    )
-
 
 def _init_session_state():
-    """세션 상태를 초기화한다. DB에 저장된 draft가 있으면 복원."""
+    """세션 상태를 초기화한다."""
     defaults = {
         "keyword_results": None,
         "scored_keywords": None,
@@ -54,50 +42,11 @@ def _init_session_state():
         "search_results": None,
         "selected_place": None,
         "place_detail": None,
+        "current_draft_id": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
-
-    # DB에서 작성 중인 글 복원 (최초 1회)
-    if "draft_loaded" not in st.session_state and is_db_available():
-        draft = load_draft()
-        if draft and draft.get("restaurant_name"):
-            # 텍스트 필드 복원
-            restore_map = {
-                "input_regions": "regions",
-                "input_menus": "menus",
-                "input_ordered": "ordered_menus",
-                "review_best": "review_best",
-                "review_worst": "review_worst",
-                "review_episode": "review_episode",
-                "input_companion": "companion",
-                "input_mood": "mood",
-                "input_memo": "memo",
-                "review_vibe": "review_vibe",
-                "review_cook": "review_cook",
-                "review_wait": "review_wait",
-                "review_revisit": "review_revisit",
-            }
-            for session_key, db_key in restore_map.items():
-                if draft.get(db_key):
-                    st.session_state[session_key] = draft[db_key]
-
-            # JSON 필드 복원
-            if draft.get("scored_keywords"):
-                st.session_state["scored_keywords"] = draft["scored_keywords"]
-            if draft.get("blog_result"):
-                st.session_state["blog_result"] = draft["blog_result"]
-            if draft.get("hashtags"):
-                st.session_state["hashtags"] = draft["hashtags"]
-            if draft.get("expanded_inputs"):
-                st.session_state["expanded_inputs"] = draft["expanded_inputs"]
-            if draft.get("photo_analysis"):
-                st.session_state["photo_analysis"] = draft["photo_analysis"]
-
-            st.session_state["draft_restaurant_name"] = draft["restaurant_name"]
-
-        st.session_state["draft_loaded"] = True
 
 
 _init_session_state()
@@ -109,64 +58,157 @@ if missing_keys:
     st.info("`.env` 파일을 확인해주세요. `.env.example`을 참고하세요.")
     st.stop()
 
-# DB 상태 표시
-if is_db_available():
-    restored_name = st.session_state.get("draft_restaurant_name", "")
-    if restored_name:
-        st.caption(f"💾 이전 작성 중: **{restored_name}** (자동 복원됨)")
-else:
-    st.caption("⚠️ DB 미연결 - 새로고침 시 데이터 유실")
 
-# === 사이드바: 음식점 검색 ===
+# === 사이드바 ===
 with st.sidebar:
+    # 임시저장 목록
+    if is_db_available():
+        st.header("📋 내 글 목록")
+
+        # 새 글 작성 버튼
+        if st.button("➕ 새 글 작성", use_container_width=True, key="btn_new_draft"):
+            # 현재 작업 저장
+            if st.session_state.get("place_detail") and st.session_state.get("current_draft_id"):
+                save_draft(st.session_state["current_draft_id"], st.session_state)
+            # 세션 초기화
+            for key in [
+                "keyword_results", "scored_keywords", "blog_result",
+                "hashtags", "search_results", "selected_place", "place_detail",
+                "current_draft_id", "expanded_inputs", "photo_analysis",
+            ]:
+                st.session_state[key] = None
+            st.rerun()
+
+        # 목록 표시
+        drafts = list_drafts()
+        if drafts:
+            for d in drafts:
+                name = d.get("restaurant_name", "제목 없음") or "제목 없음"
+                region = d.get("regions", "") or ""
+                has_result = "✅" if d.get("blog_result") else "✏️"
+                updated = d.get("updated_at", "")[:10]
+
+                col_name, col_del = st.columns([4, 1])
+                with col_name:
+                    if st.button(
+                        f"{has_result} {name} ({region})",
+                        key=f"draft_{d['id']}",
+                        use_container_width=True,
+                    ):
+                        # 현재 작업 저장
+                        if st.session_state.get("place_detail") and st.session_state.get("current_draft_id"):
+                            save_draft(st.session_state["current_draft_id"], st.session_state)
+                        # 선택한 draft 복원
+                        full_draft = load_draft(d["id"])
+                        if full_draft:
+                            restore_draft_to_session(full_draft)
+                            st.session_state["current_draft_id"] = d["id"]
+                            st.session_state["draft_restaurant_name"] = name
+                            # place_detail은 검색 결과에서 오므로 간이 복원
+                            if not st.session_state.get("place_detail") and name != "제목 없음":
+                                st.session_state["place_detail"] = {
+                                    "name": name,
+                                    "road_address": full_draft.get("memo", ""),
+                                    "address": "",
+                                    "category": full_draft.get("menus", ""),
+                                    "telephone": "",
+                                }
+                        st.rerun()
+                with col_del:
+                    if st.button("🗑", key=f"del_{d['id']}"):
+                        delete_draft(d["id"])
+                        if st.session_state.get("current_draft_id") == d["id"]:
+                            st.session_state["current_draft_id"] = None
+                        st.rerun()
+
+            st.caption(f"총 {len(drafts)}개 글")
+        else:
+            st.caption("저장된 글이 없어요. 음식점 검색으로 시작하세요!")
+
+        st.divider()
+
+    # 음식점 검색
     search_query, btn_search, btn_reset = render_sidebar_search()
 
+    # 대시보드
+    st.divider()
+    with st.expander("📈 블로그 성장 대시보드", expanded=False):
+        render_advisor_dashboard()
+
+
+# === 초기화 ===
 if btn_reset:
-    clear_draft()
-    handle_reset()
+    if st.session_state.get("current_draft_id"):
+        save_draft(st.session_state["current_draft_id"], st.session_state)
+    for key in [
+        "keyword_results", "scored_keywords", "blog_result",
+        "hashtags", "search_results", "selected_place", "place_detail",
+        "current_draft_id", "expanded_inputs", "photo_analysis",
+    ]:
+        st.session_state[key] = None
+    st.rerun()
 
 if btn_search and search_query:
     handle_search(search_query)
 
-# === 검색 결과 표시 및 선택 ===
+# === 메인 영역 ===
+
+# 오늘 예정된 주제 알림
+_today_topic = get_today_topic()
+if _today_topic and not _today_topic.get("done"):
+    st.markdown(
+        f'<div style="background:#fff3cd;border-left:4px solid #ff9800;'
+        f'padding:12px 16px;border-radius:4px;margin-bottom:12px;">'
+        f'📌 <b>오늘의 주제:</b> {_today_topic["topic"]}</div>',
+        unsafe_allow_html=True,
+    )
+
+# 현재 작성 중인 글 표시
+current_name = st.session_state.get("draft_restaurant_name", "")
+if current_name:
+    st.markdown(f"#### ✏️ {current_name}")
+elif st.session_state.get("place_detail"):
+    st.markdown(f"#### ✏️ {st.session_state['place_detail'].get('name', '')}")
+else:
+    st.markdown("#### 🍽️ 맛집 블로그 자동화")
+    st.caption("사이드바에서 음식점을 검색하거나, 목록에서 글을 선택하세요.")
+
+# 검색 결과
 if st.session_state.search_results and not st.session_state.selected_place:
     render_search_results()
 
-# === 선택된 음식점 상세 정보 ===
+# 선택된 음식점
 if st.session_state.place_detail:
+    # 새 음식점이면 draft ID 생성
+    if not st.session_state.get("current_draft_id") and is_db_available():
+        new_id = save_draft("", st.session_state)
+        st.session_state["current_draft_id"] = new_id
+
     render_place_detail(
         on_analyze=None,
         on_generate=run_full_pipeline,
     )
 
-# === 키워드 결과 표시 ===
+# 키워드 결과
 if st.session_state.scored_keywords:
     st.subheader("📊 추천 키워드 (점수 상위)")
     df = pd.DataFrame(st.session_state.scored_keywords)
     df.columns = ["키워드", "검색량", "경쟁도", "트렌드", "점수"]
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-# === 블로그 결과 표시 ===
+# 블로그 결과
 if st.session_state.blog_result:
     render_blog_result()
 
-# === 해시태그 표시 ===
+# 해시태그
 if st.session_state.hashtags:
     st.subheader("🏷 해시태그")
     hashtag_text = " ".join(st.session_state.hashtags)
     st.code(hashtag_text, language=None)
-    st.button(
-        "📋 해시태그 복사",
-        key="copy_hashtags",
-        on_click=lambda: set_clipboard("hashtag", hashtag_text),
-    )
 
-# === 블로그 성장 대시보드 (사이드바 하단) ===
-with st.sidebar:
-    st.divider()
-    with st.expander("📈 블로그 성장 대시보드", expanded=False):
-        render_advisor_dashboard()
-
-# === DB 자동 저장 (매 렌더링마다) ===
-if is_db_available():
-    save_draft(st.session_state)
+# === DB 자동 저장 ===
+if is_db_available() and st.session_state.get("place_detail"):
+    draft_id = st.session_state.get("current_draft_id", "")
+    saved_id = save_draft(draft_id, st.session_state)
+    if saved_id and saved_id != draft_id:
+        st.session_state["current_draft_id"] = saved_id
