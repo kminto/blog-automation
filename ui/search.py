@@ -17,7 +17,7 @@ def _render_draft_import():
     """네이버 글에서 사진 가져오기 UI를 렌더링한다."""
     st.markdown("---")
     st.markdown("**📥 네이버 글에서 사진 가져오기**")
-    st.caption("사진만 올린 글 URL을 넣으면 자동 분석해요")
+    st.caption("⚠️ 전체공개 글만 가능 (비공개/이웃공개 불가)")
 
     draft_url = st.text_input(
         "글 URL",
