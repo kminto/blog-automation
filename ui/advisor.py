@@ -6,6 +6,7 @@
 import streamlit as st
 
 from modules.blog_analytics import fetch_blog_stats, analyze_blog_growth
+from modules.style_learner import crawl_my_blog, analyze_style, get_style_profile
 from modules.blog_advisor import (
     get_trending_topics,
     get_neighbor_recommendations,
@@ -187,3 +188,32 @@ def render_advisor_dashboard():
         for t in get_trending_topics()[:5]:
             icon = "📈" if t["trend"] == "상승" else "➡️"
             st.markdown(f"{icon} {t['keyword']} ({t['type']})")
+
+    st.markdown("---")
+
+    # 내 말투 학습
+    profile = get_style_profile()
+    if profile:
+        st.markdown(f"🧠 **말투 학습 완료** ({profile.get('sample_count', 0)}편 분석)")
+        endings = [e[0] for e in profile.get("top_endings", [])[:4]]
+        st.caption(f"주요 어미: {', '.join(endings)}")
+    else:
+        st.caption("🧠 말투 학습 전 (아래 버튼으로 학습)")
+
+    if st.button("🧠 내 말투 학습하기", key="btn_learn_style"):
+        with st.spinner("블로그 글 크롤링 중... (8편 수집)"):
+            samples = crawl_my_blog("rinx_x", max_posts=8)
+        if samples:
+            with st.spinner("말투 패턴 분석 중..."):
+                result = analyze_style(samples)
+            st.success(f"학습 완료! {len(samples)}편 분석, {result.get('total_chars', 0):,}자")
+            st.markdown("**분석 결과:**")
+            endings = [f"{e[0]}({e[1]})" for e in result.get("top_endings", [])[:5]]
+            st.caption(f"어미: {', '.join(endings)}")
+            expressions = [f"{e[0]}({e[1]})" for e in result.get("top_expressions", [])[:5]]
+            st.caption(f"감탄사: {', '.join(expressions)}")
+            colloquials = [e[0] for e in result.get("top_colloquials", [])[:6]]
+            st.caption(f"구어체: {', '.join(colloquials)}")
+            st.caption(f"문장 평균: {result['sentence_stats']['avg_length']}자")
+        else:
+            st.error("블로그 글을 가져올 수 없습니다.")

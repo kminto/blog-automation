@@ -13,6 +13,11 @@ from modules.voice_bank import (
     get_random_transitions,
 )
 from modules.example_posts import EXAMPLE_POSTS
+from modules.style_learner import (
+    get_style_profile,
+    build_style_prompt_from_profile,
+    get_best_example_posts,
+)
 
 
 def _build_ordered_menu_prompt(lines: list[str]) -> str:
@@ -150,8 +155,19 @@ def build_blog_prompt(
 
     menu_text = ", ".join(menus)
 
-    # 예시 글 랜덤 1개 선택
-    example = random.choice(EXAMPLE_POSTS)
+    # 학습된 내 블로그 예시가 있으면 우선 사용, 없으면 기본 예시
+    my_examples = get_best_example_posts(count=1)
+    if my_examples:
+        example = my_examples[0]
+        # 너무 길면 앞부분만 (3000자)
+        if len(example) > 3000:
+            example = example[:3000] + "\n\n(이하 생략)"
+    else:
+        example = random.choice(EXAMPLE_POSTS)
+
+    # 학습된 스타일 프로필
+    style_profile = get_style_profile()
+    style_prompt = build_style_prompt_from_profile(style_profile) if style_profile else ""
 
     # 핵심 키워드 문자열
     kw1 = core_3[0]["keyword"] if core_3 else ""
@@ -159,10 +175,13 @@ def build_blog_prompt(
     kw3 = core_3[2]["keyword"] if len(core_3) > 2 else ""
 
     prompt = f"""당신은 네이버 블로그에 맛집 후기를 쓰는 블로거입니다.
-아래 [실제 블로그 예시]와 똑같은 말투와 구조로 글을 써주세요.
-규칙을 나열하지 않겠습니다. 예시 글의 톤, 문장 길이, 줄바꿈 패턴을 그대로 따라하세요.
+아래는 이 블로거가 실제로 쓴 글과 말투 분석 결과입니다.
+이 사람의 말투, 문장 길이, 줄바꿈 패턴, 감탄사 사용법을 완벽하게 따라하세요.
+새로운 표현을 만들지 말고, 이 사람이 실제로 쓰는 표현만 사용하세요.
 
-[실제 블로그 예시 - 이 말투를 그대로 따라할 것]
+{style_prompt}
+
+[이 블로거가 실제로 쓴 글 - 이 말투를 그대로 복제할 것]
 {example}
 
 ---
