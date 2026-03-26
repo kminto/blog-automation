@@ -13,6 +13,7 @@ from modules.blog_writer import generate_blog_post
 from modules.hashtag_generator import generate_hashtags
 from modules.blog_advisor import add_posting_record
 from modules.keyword_cache import get_cached_keywords, save_to_cache, get_cache_stats
+from modules.post_processor import get_ai_score
 from utils.api_utils import safe_api_call
 
 
@@ -131,7 +132,12 @@ def run_blog_generation(
         progress.empty()
         return
     st.session_state.blog_result = result["data"]
-    status.write("본문 생성 완료!")
+    # AI 냄새 점수 표시
+    ai_check = get_ai_score(result["data"])
+    grade_emoji = {"좋음": "🟢", "보통": "🟡", "개선필요": "🔴"}.get(ai_check["grade"], "⚪")
+    status.write(f"본문 생성 + 후처리 완료! {grade_emoji} AI 감지 점수: {ai_check['score']}점 ({ai_check['grade']})")
+    if ai_check["issues"]:
+        status.write(f"  잔여 이슈: {', '.join(ai_check['issues'])}")
     progress.progress(50)
 
     # 2단계: 해시태그 생성 (80%)

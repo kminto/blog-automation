@@ -1,119 +1,18 @@
 """
 프롬프트 빌더 모듈
-입력값과 키워드 분석 결과를 조합하여 LLM 프롬프트를 생성한다.
-docs/STYLE.md 스타일 가이드를 기반으로 사람이 쓴 듯한 블로그 글을 생성한다.
+규칙 나열 대신 실제 블로그 예시 + 보이스 가이드 기반으로 자연스러운 글을 생성한다.
+매 생성마다 톤/표현/구조를 랜덤으로 변주하여 AI 패턴 반복을 방지한다.
 """
 
 import random
 
-from modules.constants import TITLE_COUNT, HASHTAG_MIN, HASHTAG_MAX
-
-# === 글 구조 변주 (스타일 가이드 기반) ===
-STRUCTURE_VARIATIONS = [
-    "밝은 인사 + 방문 계기 → 매장 정보 → 분위기 → 메뉴별 후기 → 한줄평",
-    "방문 계기 → 매장 정보 → 메뉴 하이라이트 → 함께 간 사람 반응 → 재방문 의사",
-    "인사 → 매장 정보 → 분위기 묘사 → 음식 사진+감상 → 총평 + 추천 이유",
-]
-
-OPENING_STYLES = [
-    "짧은 인사 + 방문 배경 (안녕하세요~ 로 시작)",
-    "방문 계기를 1~2줄로 자연스럽게",
-    "지역+가게 소개로 바로 시작",
-]
-
-
-def _build_style_guide() -> str:
-    """docs/STYLE.md 기반 스타일 지침을 반환한다."""
-    return """
-## 말투 규칙 (반드시 준수)
-
-### 문장 끝 어미 (이것만 사용)
-- ~했어요, ~었어요 (기본)
-- ~더라고요 (경험 전달)
-- ~좋았어요, ~좋더라고요
-- ~싶었어요 ("이 맛에 치맥하는 거지 싶었어요")
-- ~추천드릴게요, ~추천드려요
-- ~했답니다, ~좋았답니다
-
-### 절대 사용 금지 어미/표현
-- ~합니다, ~됩니다 (딱딱한 격식체)
-- ~인 것 같습니다, ~라고 할 수 있습니다
-- "그렇다면", "또한", "뿐만 아니라" (접속부사 남발)
-- "다양한", "풍부한", "특별한" (형용사 남발)
-- "맛의 하모니", "미각의 향연" (과장 표현)
-- "~를 자랑합니다", "~로 유명합니다" (홍보성)
-- "첫째, 둘째, 셋째" (나열식)
-
-### 감탄사/구어체
-- ㅎㅎ (문장 끝에 가볍게)
-- ㅋㅋㅋ (재미있을 때)
-- ,, (쉼표 두 개로 여운: "중독성 쩔어요,,")
-- ~ (물결표로 부드러운 마무리: "좋았어요~")
-- … (말줄임표로 감탄)
-- 구어체 OK: "여튼", "맵찔이", "오붓하게", "녹진한"
-
-### 이모지 사용
-- 소제목 앞에 1개 (📍🍣✨❤️🔚🏷)
-- 본문에 감정 이모지 적당히 (😋🥰🤤🔥💕)
-- 전체 10~15개, 남발 금지
-
-### 줄바꿈
-- 1~2문장마다 줄바꿈 (긴 문단 절대 금지)
-- [사진] 전후로 줄바꿈
-- 빈 줄로 문단 구분
-
-### 소제목 형식
-- 이모지 + 텍스트 (예: "📍 매장 정보 & 분위기")
-- ■, ▶ 같은 딱딱한 기호 사용 금지
-
-### 독자와 소통
-- 질문 1~2개 포함 ("사진에서도 바삭함이 느껴지지 않나요?!")
-- 개인 경험 중심 ("저희는~", "제가~", "친구가~")
-
-### 전체 톤
-- 20대 중반~30대 초반 여성이 친구에게 카톡으로 맛집 추천하는 느낌
-- 솔직하고 담백하되, 좋았던 건 확실히 표현
-- 내돈내산 느낌, 광고성 배제
-- 불완전한 문장도 OK ("쏘 얌이 🥵", "참치는 사랑이쥬,,")
-
-### 포맷 금지 사항 (매우 중요)
-- 마크다운 문법 절대 금지: **, ##, ---, ``` 등 사용하지 말 것
-- 구분선(---) 절대 사용 금지
-- 소제목은 반드시 "이모지 + 텍스트" 형식만 사용 (예: "📍 매장 정보 & 분위기")
-- **굵은 글씨** 마크다운 대신 이모지로 강조
-- 글머리 기호(-, *) 대신 자연스러운 문장으로 나열
-- 매장 정보만 예외로 줄 맞춤 형식 허용 ([운영정보] 블록)
-
-### 자연스러움을 위한 필수 요소 (매우 중요)
-- 반드시 ㅎㅎ를 2~3회 사용할 것
-- 반드시 ,, (쉼표 두 개)를 1~2회 사용할 것 (예: "녹진한 맛,,", "진짜 최고,,")
-- 반드시 ~ (물결표)를 문장 끝에 5회 이상 사용할 것
-- "여튼", "오붓하게", "고급진" 같은 구어체를 2~3개 포함할 것
-- 동행인 반응을 구체적으로 서술할 것 (예: "친구가 '이건 진짜 미쳤다'며 연신 감탄했어요")
-- 가끔 엉뚱한 비유나 허당끼를 넣을 것 (예: "곧 빵빵해질 위를 먼저 달래줍니다")
-- 완벽하지 않은 문장도 섞을 것 (예: "이건 진짜… 🤤", "고기는 역시 우시야지,,")
-
-### AI 감지 방지 규칙 (매우 중요)
-- 문장 길이를 랜덤하게 섞을 것: 5글자 짧은 문장, 30~40글자 긴 문장을 번갈아
-- "맛있었어요", "좋았어요" 같은 표현을 2회 이상 반복하지 말 것
-- 메뉴마다 반드시 다른 감상 표현 사용 (식감, 향, 온도, 비주얼, 소리 등 다른 감각)
-- 반드시 솔직한 아쉬운 점을 1~2개 포함할 것 (예: "소스가 좀 더 짰으면", "양이 좀 아쉬웠어요")
-- 아쉬운 점이 있어야 리뷰가 신뢰감 있고 체류시간이 늘어남
-- 방문 중 있었던 작은 에피소드를 2~3개 넣을 것 (예: "주문하는데 옆 테이블에서 '거기 뭐 먹어요?' 하고 물어보셨어요 ㅋㅋ")
-
-### 체류시간 높이는 구조 (매우 중요)
-- 글 초반에 궁금증을 유발하는 문장 넣기 (예: "근데 한 가지 아쉬운 점이 있었는데요...")
-- 메뉴 리뷰 중간에 독자에게 질문 2~3개 (예: "여러분은 국밥에 밥 말아 먹는 파? 따로 먹는 파?")
-- 중간에 한줄 꿀팁 넣기 (예: "💡 꿀팁: 여기 국물은 후추를 살짝 뿌리면 두 배로 맛있어요")
-- 마지막에 다음 글 예고 (예: "다음엔 옆에 있던 OO도 가볼 예정이에요~ 기대해주세요!")
-- 개인 순위를 매길 때 이유를 구체적으로 써서 "공감"을 유도
-
-### 사용자가 직접 수정해야 할 부분 표시
-본문 중에 사용자가 실제 경험으로 바꿔야 할 부분은 ✏️ 표시를 해둘 것:
-- ✏️(실제 에피소드로 교체) — 이 부분에 실제 있었던 일을 2~3줄 직접 써주세요
-- ✏️(실제 감상으로 교체) — 직접 먹어본 느낌을 한 줄만 바꿔주세요
-각 글에 ✏️ 표시를 3~4곳 넣어서, 사용자가 최소한의 수정으로 자기만의 글이 되게 할 것
-"""
+from modules.constants import TITLE_COUNT
+from modules.voice_bank import (
+    pick_voice_set,
+    build_voice_guide,
+    get_random_transitions,
+)
+from modules.example_posts import EXAMPLE_POSTS
 
 
 def _build_ordered_menu_prompt(lines: list[str]) -> str:
@@ -122,12 +21,10 @@ def _build_ordered_menu_prompt(lines: list[str]) -> str:
         return ""
 
     menus = []
-    sides = []
     for line in lines:
         line = line.strip()
         if not line:
             continue
-        # "메뉴명 - 설명" 또는 "메뉴명" 형태
         if " - " in line:
             name, desc = line.split(" - ", 1)
             menus.append({"name": name.strip(), "desc": desc.strip()})
@@ -137,38 +34,29 @@ def _build_ordered_menu_prompt(lines: list[str]) -> str:
     if not menus:
         return ""
 
-    # 첫 번째는 메인, 나머지 중 음료/사이드 판별
     drink_keywords = ["맥주", "소주", "사케", "와인", "음료", "하이볼", "콜라"]
     side_keywords = ["사이드", "디저트", "후식", "샐러드", "볶음밥"]
 
     main_menus = []
     side_menus = []
     for m in menus:
-        name_lower = m["name"]
-        if any(kw in name_lower for kw in drink_keywords + side_keywords):
+        if any(kw in m["name"] for kw in drink_keywords + side_keywords):
             side_menus.append(m)
         else:
             main_menus.append(m)
 
-    result = "\n## 내가 주문한 메뉴 (이 메뉴들로 리뷰를 작성할 것)\n"
+    result = "\n[내가 주문한 메뉴]\n"
     if main_menus:
-        result += "\n메인 메뉴:\n"
-        for i, m in enumerate(main_menus, 1):
-            desc = f" ({m['desc']})" if m["desc"] else ""
-            result += f"  {i}. {m['name']}{desc}\n"
-
+        result += "메인:\n"
+        for m in main_menus:
+            desc = f" - {m['desc']}" if m["desc"] else ""
+            result += f"  {m['name']}{desc}\n"
     if side_menus:
-        result += "\n사이드/음료:\n"
-        for i, m in enumerate(side_menus, 1):
-            desc = f" ({m['desc']})" if m["desc"] else ""
-            result += f"  {i}. {m['name']}{desc}\n"
+        result += "사이드/음료:\n"
+        for m in side_menus:
+            desc = f" - {m['desc']}" if m["desc"] else ""
+            result += f"  {m['name']}{desc}\n"
 
-    result += """
-위 메뉴 각각에 대해 반드시 별도 섹션으로 리뷰를 작성할 것.
-메인 메뉴는 각각 🍽 소제목 + [움짤] + [사진]2개 + 10줄 이상 리뷰.
-사이드/음료는 각각 🍺 소제목 + [사진]1개 + 5줄 이상 리뷰.
-입력된 메뉴만 리뷰하고, 없는 메뉴를 지어내지 말 것.
-"""
     return result
 
 
@@ -178,20 +66,15 @@ def _pick_core_keywords(
     count: int = 3,
 ) -> list[dict]:
     """가게/지역 관련 키워드 중 검색량 높은 순으로 N개를 선별한다."""
-    # 맛집/고기/술집 등 가게 관련 키워드만 필터
     relevant = ["맛집", "고기", "술집", "오마카세", "구이", "회식", "데이트"]
     relevant.extend(regions)
 
-    # 검색량 기준 정렬 (경쟁도 무관, 순수 검색량 높은 순)
-    candidates = []
-    for kw in keywords:
-        keyword = kw["keyword"]
-        if any(term in keyword for term in relevant):
-            candidates.append(kw)
-
+    candidates = [
+        kw for kw in keywords
+        if any(term in kw["keyword"] for term in relevant)
+    ]
     candidates.sort(key=lambda x: x["search_volume"], reverse=True)
 
-    # 중복 없이 상위 N개
     result = []
     seen = set()
     for kw in candidates:
@@ -201,7 +84,6 @@ def _pick_core_keywords(
         if len(result) >= count:
             break
 
-    # 부족하면 나머지에서 채우기
     if len(result) < count:
         for kw in keywords:
             if kw["keyword"] not in seen:
@@ -211,277 +93,6 @@ def _pick_core_keywords(
                 break
 
     return result
-
-
-def _pick_top_relevant(
-    keywords: list[dict],
-    name: str,
-    regions: list[str],
-) -> str:
-    """가게/지역과 직접 관련된 검색량 높은 키워드 3개를 해시태그로 반환한다."""
-    relevant_terms = ["맛집", "고기", "술집", "데이트", "회식", "오마카세"]
-    relevant_terms.extend(regions)
-
-    picked = []
-    for kw in keywords:
-        keyword = kw["keyword"]
-        # 지역명이 포함되거나 맛집/고기 등 관련 키워드인 경우만
-        if any(term in keyword for term in relevant_terms):
-            picked.append(keyword)
-        if len(picked) >= 3:
-            break
-
-    # 3개 못 채우면 검색량 순으로 채우기
-    if len(picked) < 3:
-        for kw in keywords:
-            if kw["keyword"] not in picked:
-                picked.append(kw["keyword"])
-            if len(picked) >= 3:
-                break
-
-    return " #".join(picked)
-
-
-def build_blog_prompt(
-    restaurant_name: str,
-    regions: list[str],
-    menus: list[str],
-    companion: str,
-    mood: str,
-    memo: str,
-    top_keywords: list[dict],
-) -> str:
-    """블로그 본문 생성을 위한 프롬프트를 구성한다."""
-    structure = random.choice(STRUCTURE_VARIATIONS)
-    opening = random.choice(OPENING_STYLES)
-
-    keyword_list = ", ".join([kw["keyword"] for kw in top_keywords])
-    region_text = ", ".join(regions)
-
-    # 본문용 핵심 키워드 3개 선별 (가게/지역 관련 + 검색량 높은 순)
-    core_3 = _pick_core_keywords(top_keywords, regions, 3)
-
-    # 메모에서 주문 메뉴 파싱
-    ordered_section = ""
-    if "[내가 주문한 메뉴]" in memo:
-        parts = memo.split("[내가 주문한 메뉴]")
-        remaining = parts[1]
-        # [내 솔직 후기]가 있으면 분리
-        if "[내 솔직 후기]" in remaining:
-            menu_part, review_part = remaining.split("[내 솔직 후기]")
-            ordered_lines = menu_part.strip().split("\n")
-            my_review_text = review_part.strip()
-        else:
-            ordered_lines = remaining.strip().split("\n")
-            my_review_text = ""
-        memo = parts[0].strip()
-        ordered_section = _build_ordered_menu_prompt(ordered_lines)
-    elif "[내 솔직 후기]" in memo:
-        parts = memo.split("[내 솔직 후기]")
-        memo = parts[0].strip()
-        my_review_text = parts[1].strip()
-    else:
-        my_review_text = ""
-
-    menu_text = ", ".join(menus)
-
-    # 내 후기 프롬프트 구성
-    review_section = ""
-    if my_review_text:
-        review_section = f"""
-## 내 솔직 후기 (가장 중요! 이 내용을 중심으로 글을 작성할 것)
-
-아래는 사용자가 직접 쓴 실제 경험/감상입니다:
-\"\"\"{my_review_text}\"\"\"
-
-위 후기를 반드시 지킬 규칙:
-- 위 내용이 글의 핵심이다. 사용자의 표현과 감상을 최대한 살려서 확장할 것
-- 사용자가 "맛없다", "아쉽다"고 쓰면 그대로 반영 (임의로 좋게 바꾸지 말 것)
-- 사용자가 쓴 표현을 자연스럽게 본문에 녹일 것 (예: "소스가 좀 아쉬움" → "개인적으로 소스가 좀 아쉬웠어요~")
-- 사용자가 언급하지 않은 맛/감상을 지어내지 말 것
-- 사용자 후기에 없는 메뉴는 리뷰하지 말 것
-- 부족한 부분만 분위기/비주얼/식감 묘사로 보충
-"""
-
-    style_guide = _build_style_guide()
-
-    prompt = f"""당신은 네이버 블로그 맛집 리뷰를 쓰는 20대 후반 여성 블로거입니다.
-사용자의 실제 후기를 바탕으로 자연스러운 블로그 글로 확장해주세요.
-사용자가 직접 느낀 점을 중심으로, 살을 붙여서 블로그 형태로 만들어주세요.
-
-## 음식점 정보
-- 음식점 이름: {restaurant_name}
-- 지역: {region_text}
-- 대표 메뉴: {menu_text}
-- 방문 인원/동행: {companion}
-- 분위기: {mood}
-- 추가 메모: {memo or "없음"}
-{ordered_section}
-{review_section}
-
-## SEO 키워드 전략 (검색 상위 노출 - 가장 중요한 규칙)
-
-전체 키워드 데이터:
-{_build_keyword_table(top_keywords)}
-
-본문에 녹일 핵심 키워드 3개 (이 3개만 집중, 검색량 높은 관련 키워드):
-  1위: {core_3[0]["keyword"]} (검색량 {core_3[0]["search_volume"]:,} / {core_3[0]["competition"]})
-  2위: {core_3[1]["keyword"] if len(core_3) > 1 else ""} (검색량 {core_3[1]["search_volume"]:,} / {core_3[1]["competition"]} if len(core_3) > 1 else "")
-  3위: {core_3[2]["keyword"] if len(core_3) > 2 else ""} (검색량 {core_3[2]["search_volume"]:,} / {core_3[2]["competition"]} if len(core_3) > 2 else "")
-
-키워드 3개 삽입 규칙:
-- 서론 해시태그: 위 3개를 해시태그로 사용
-- 1위 키워드: 본문에 4~5회 삽입 (서론, 소제목, 중간, 마무리)
-- 2위 키워드: 본문에 2~3회 삽입
-- 3위 키워드: 본문에 1~2회 삽입
-- 삽입 위치: 첫 3줄, 소제목, 메뉴 리뷰 중간, 마무리 문단
-- 절대 같은 키워드를 연속 2문장에 넣지 말 것
-- 문맥에 맞게 자연스럽게 녹일 것 (억지로 넣지 말 것)
-
-{style_guide}
-
-## 글 구성
-- 구조: {structure}
-- 도입부: {opening}
-
-## 블로그 구성 (이 순서를 반드시 지킬 것, 각 섹션 충분히 길게 작성)
-
-1. 본문 스타트: 제목 + 핵심 한줄 요약 + 해시태그 3개(검색량 TOP3 키워드 사용)
-   예시: "방이동맛집 우시야 방이점 A코스 내돈내산 후기🔥
-   친구랑 방이동고기집에서 고급 한우 즐기고 왔어요~
-   #방이동맛집 #송파맛집 #방이동고기집"
-2. 한줄평 (최소 5줄):
-   - 방문 계기 + 누가 추천했는지/어떻게 알게 됐는지
-   - 기대감 표현
-   - 첫 3줄 안에 검색량 1위 키워드 포함
-
-3. 가게 외관 (최소 4줄):
-   [사진: 외관 설명]
-   위치 설명 + 찾아가는 방법 + 주변 랜드마크
-   [사진: 간판 or 입구]
-
-4. 간단 소개글 (최소 3줄): 결론/기대감 미리 살짝, 에피소드 넣기
-
-5. 매장 정보:
-   [운영정보]
-   위치 :
-   운영시간 :
-   라스트오더 :
-   전화번호 :
-   예약 :
-   포장, 배달 :
-   화장실 :
-
-6. 주차 안내 (최소 4줄): 실제 경험 기반 + 대안(대중교통 등) + 팁
-
-7. 가게 내부 분위기 (최소 8줄):
-   [사진: 내부 전경]
-   인테리어 묘사 4줄 이상 + 테이블 수 + 분위기
-   [사진: 테이블 세팅]
-   누구와 오면 좋을지 + 웨이팅 경험 + 좌석 종류(바, 테이블 등)
-   [사진: 추가 내부 모습]
-
-8. 메뉴판 전체 (최소 3줄):
-   [사진: 메뉴판사진 드루갑니다~~]
-   메뉴 구성 설명 + 뭘 고를지 고민한 에피소드 + 주문 내역
-
-9. 셀프바 & 기본 반찬 (최소 5줄):
-   [사진: 셀프바 or 기본 세팅]
-   셀프바 설명 3줄 (그릴 세팅, 양념통 등)
-   [사진: 기본반찬]
-   기본반찬 하나하나 설명 + 입가심 팁
-
-10. 메인 메뉴 리뷰 (메뉴당 최소 10줄, 이 섹션이 가장 길어야 함):
-    주문한 메뉴를 최소 2개 이상 각각 상세하게:
-
-    🍽 메인 메뉴 : (메뉴이름)
-    [움짤: 조리 과정 설명 - 예: 고기 굽는 중이에요~ 지글지글🔥]
-    첫인상/비주얼 감상 3줄
-    [사진: 음식 클로즈업1]
-    맛/식감 상세 묘사 4줄 이상 (향, 식감, 간, 소스 등)
-    동행인 반응 구체적으로 ("친구가 '이건 진짜 미쳤다'며~")
-    [사진: 음식 클로즈업2 or 다른 각도]
-    추가 감상 + 꿀팁 (예: "쯔란 추가하면 더 맛있어요~~")
-
-    (두 번째 메뉴도 같은 분량으로 반복)
-
-11. 사이드 메뉴 (메뉴당 최소 5줄):
-    🍺 사이드 메뉴 : (메뉴이름)
-    [사진: 사이드 메뉴]
-    감상 3줄 이상 + 좋았던 점 + 아쉬웠던 점 솔직하게
-    (사이드가 여러 개면 각각 반복)
-
-12. 개인 순위/총평 (최소 5줄):
-    내 개인 순위 매기기 (예: "마라양꼬치 > 일반양꼬치 > 매운맛양꼬치")
-    동행인은 다른 의견이었는지 언급
-    어떤 분에게 추천하는지
-    재방문할 메뉴 예고
-
-13. 마지막 한줄평 (최소 3줄):
-    재방문 의사 + 추천 마무리
-    해시태그 20개 (아래 규칙 참고)
-
-## 분량 규칙 (절대 지킬 것, 가장 중요한 규칙)
-- 전체 본문 반드시 2500자 이상 (2000자 미만은 실패)
-- 메인 메뉴 리뷰 섹션이 전체의 40% 이상 차지해야 함
-- 각 메뉴 리뷰마다 [사진] 3개 이상 + 텍스트 10줄 이상
-- 사진 자리 전체 최소 15곳 이상
-- 짧게 요약하지 말고 에피소드, 동행인 반응, 비유, 꿀팁을 넣어 풍성하게
-- "맛있었어요"로 끝내지 말고 구체적으로 (식감, 향, 온도, 비주얼, 소스 등)
-
-## 사진 표시 규칙
-- [사진: 민서 말투 설명] 형식으로 최소 12곳 표시
-- 좋은 예: [사진: 메뉴판사진 드루갑니다~~], [사진: 고기 굽는 중이에요~ 지글지글🔥]
-- 나쁜 예: [사진] (설명 없음), [사진: 음식 사진입니다] (건조함)
-- 움짤(GIF) 자리는 [움짤: 설명] 으로 따로 표시
-
-## 제목 생성 규칙 (SEO 최적화 - 매우 중요)
-
-아래 키워드 데이터를 참고하여 제목을 만들 것:
-{_build_keyword_table(top_keywords)}
-
-제목 공식: [검색량 높은 키워드] + [가게명] + [보조 키워드 or 감성 한마디]
-- 제목 앞쪽에 검색량이 가장 높은 키워드를 배치 (네이버는 앞쪽 키워드에 가중치)
-- 경쟁도 "낮음"/"중간"인 키워드를 우선 사용 (상위 노출 확률 높음)
-- 검색량 높음 + 경쟁도 낮음 = 가장 좋은 키워드 (점수가 높은 것)
-- 제목 길이 25~40자 (너무 짧으면 키워드 부족, 너무 길면 잘림)
-- 특수문자 없이 깔끔하게
-- 제목 5개를 각각 다른 키워드 조합으로 만들 것
-
-좋은 제목 예시:
-- "방이동맛집 우시야 방이점 한우 오마카세 솔직후기"
-- "송파 방이동고기집 우시야 A코스 내돈내산 후기"
-나쁜 제목 예시:
-- "우시야 방이점에서 특별한 저녁" (키워드 없음, 검색 안 됨)
-- "송파 고급스러운 분위기의 맛집" (가게명 없음)
-
-## 출력 형식
-
-### 제목 후보
-(위 규칙대로 {TITLE_COUNT}개)
-
-### 본문
-(위 구성 순서와 스타일 규칙을 철저히 따른 네이버 블로그 본문)
-
-### 해시태그
-(정확히 20개, 공백으로 구분, 한 줄에 나열)
-
-해시태그 구성 규칙 (경쟁력 기반):
-- 핵심 키워드 3개를 해시태그 맨 앞에 배치 (예: #방이동맛집 #송파맛집 #방이동고기집)
-- 가게명 포함 해시태그 2개 (예: #우시야방이점 #우시야)
-- 지역 변형 5개 (예: #방이동먹자골목맛집 #방이역맛집 #송파구맛집 #방이동술집 #방이맛집)
-- 메뉴/상황 키워드 5개 (예: #한우오마카세 #소고기구이 #육사시미 #데이트코스 #내돈내산)
-- 일반 검색 키워드 5개 (예: #맛집추천 #서울맛집 #고기집추천 #맛스타그램 #먹스타그램)
-- 경쟁도 낮은 롱테일 키워드를 우선 포함할 것
-
-## 최종 점검 (작성 완료 후 반드시 확인)
-- 본문이 2500자 미만이면 메인 메뉴 리뷰를 더 상세하게 늘릴 것
-- 메인 메뉴 각각에 대해 향, 식감, 온도, 비주얼, 소스, 곁들임을 모두 언급했는지 확인
-- 동행인의 구체적 대사를 최소 2곳 포함했는지 확인
-- [사진] + [움짤]이 합쳐서 15곳 이상인지 확인
-- 부족하면 반드시 내용을 추가하여 2500자 이상 맞출 것
-"""
-    return prompt
 
 
 def _build_keyword_table(keywords: list[dict]) -> str:
@@ -496,6 +107,140 @@ def _build_keyword_table(keywords: list[dict]) -> str:
             f"{kw['competition']} | {kw['score']:,.0f}"
         )
     return "\n".join(lines)
+
+
+def build_blog_prompt(
+    restaurant_name: str,
+    regions: list[str],
+    menus: list[str],
+    companion: str,
+    mood: str,
+    memo: str,
+    top_keywords: list[dict],
+) -> str:
+    """블로그 본문 생성을 위한 프롬프트를 구성한다."""
+
+    # 보이스 세트 랜덤 선택
+    voice = pick_voice_set()
+    voice_guide = build_voice_guide(voice)
+    transitions = get_random_transitions()
+
+    keyword_list = ", ".join([kw["keyword"] for kw in top_keywords])
+    region_text = ", ".join(regions)
+    core_3 = _pick_core_keywords(top_keywords, regions, 3)
+
+    # 메모에서 주문 메뉴 / 후기 분리
+    ordered_section = ""
+    my_review_text = ""
+    if "[내가 주문한 메뉴]" in memo:
+        parts = memo.split("[내가 주문한 메뉴]")
+        remaining = parts[1]
+        if "[내 솔직 후기]" in remaining:
+            menu_part, review_part = remaining.split("[내 솔직 후기]")
+            ordered_lines = menu_part.strip().split("\n")
+            my_review_text = review_part.strip()
+        else:
+            ordered_lines = remaining.strip().split("\n")
+        memo = parts[0].strip()
+        ordered_section = _build_ordered_menu_prompt(ordered_lines)
+    elif "[내 솔직 후기]" in memo:
+        parts = memo.split("[내 솔직 후기]")
+        memo = parts[0].strip()
+        my_review_text = parts[1].strip()
+
+    menu_text = ", ".join(menus)
+
+    # 예시 글 랜덤 1개 선택
+    example = random.choice(EXAMPLE_POSTS)
+
+    # 핵심 키워드 문자열
+    kw1 = core_3[0]["keyword"] if core_3 else ""
+    kw2 = core_3[1]["keyword"] if len(core_3) > 1 else ""
+    kw3 = core_3[2]["keyword"] if len(core_3) > 2 else ""
+
+    prompt = f"""당신은 네이버 블로그에 맛집 후기를 쓰는 블로거입니다.
+아래 [실제 블로그 예시]와 똑같은 말투와 구조로 글을 써주세요.
+규칙을 나열하지 않겠습니다. 예시 글의 톤, 문장 길이, 줄바꿈 패턴을 그대로 따라하세요.
+
+[실제 블로그 예시 - 이 말투를 그대로 따라할 것]
+{example}
+
+---
+
+[이번에 쓸 글 정보]
+음식점: {restaurant_name}
+지역: {region_text}
+대표 메뉴: {menu_text}
+동행: {companion or "미입력"}
+분위기: {mood or "미입력"}
+메모: {memo or "없음"}
+{ordered_section}
+
+[내 솔직 후기 - 이 내용이 글의 핵심]
+{my_review_text or "후기 미입력 - 일반적인 긍정 리뷰로 작성"}
+
+후기 활용 규칙:
+- 위 후기 내용을 그대로 살려서 블로그 말투로 풀어쓸 것
+- 내가 "맛없다", "아쉽다" 쓰면 그대로 반영 (좋게 바꾸지 말 것)
+- 내가 안 먹은 메뉴를 지어내지 말 것
+- 부족한 부분만 분위기/비주얼 묘사로 살짝 보충
+
+[이번 글의 톤 설정]
+{voice_guide}
+
+[섹션 전환 표현 - 자연스럽게 사용]
+내부로 넘어갈 때: "{transitions['to_interior']}"
+메뉴 소개: "{transitions['to_menu']}"
+음식 등장: "{transitions['to_food']}"
+총평: "{transitions['to_closing']}"
+
+[SEO 키워드]
+본문에 자연스럽게 녹일 핵심 키워드:
+1위: {kw1}  2위: {kw2}  3위: {kw3}
+
+- 1위 키워드를 서론 + 중간 + 마무리에 3~4회 자연스럽게 삽입
+- 나머지는 1~2회씩
+- 억지로 넣지 말고 문맥에 맞게만
+
+[작성 규칙 - 최소한만]
+
+구조: 자유롭게. 예시 글처럼 자연스러운 흐름으로 작성.
+단, 아래 요소는 반드시 포함:
+1. 서론 (방문 계기 + 해시태그 3개)
+2. [운영정보] 블록 (위치/운영시간/전화번호 등)
+3. 내부 분위기 (사진 + 2~3줄)
+4. 주문한 메뉴별 리뷰 (메뉴당 사진 2개 이상 + 솔직 감상)
+5. 아쉬운 점 1개 (신뢰감)
+6. 총평 + 재방문 의사
+7. 해시태그 20개
+
+금지:
+- **, ##, --- 등 마크다운 문법
+- "다양한", "풍부한", "맛의 하모니", "미각의 향연"
+- ~합니다, ~됩니다 (격식체)
+- "첫째, 둘째" 나열식
+- ✏️ 표시나 수정 안내 (완성본을 쓸 것)
+- 같은 표현("맛있었어요") 3회 이상 반복
+
+필수:
+- [사진: 말투로 설명] 형식 12곳 이상
+- [움짤: 설명] 2곳 이상
+- 1~2문장마다 줄바꿈 (긴 문단 절대 금지)
+- 전체 2500자 이상
+- 소제목은 이모지+텍스트 (📍, 🍽, 🍺, 🔚 등)
+
+[출력 형식]
+
+### 제목 후보
+(SEO 키워드 앞배치, 25~40자, {TITLE_COUNT}개)
+
+### 본문
+(예시 글과 같은 말투의 완성된 블로그 본문)
+
+### 해시태그
+(20개, 공백 구분, 한 줄)
+"""
+    return prompt
 
 
 def build_title_only_prompt(
@@ -516,12 +261,10 @@ def build_title_only_prompt(
 키워드 분석 데이터 (점수 높은 순):
 {keyword_table}
 
-제목 생성 규칙:
+제목 규칙:
 - 공식: [검색량 높은 키워드] + [가게명] + [보조 키워드/감성 한마디]
-- 제목 앞쪽에 검색량 높은 키워드 배치 (네이버 SEO 가중치)
-- 경쟁도 낮음/중간 키워드를 우선 포함 (상위 노출 유리)
-- 점수가 높은 키워드 = 검색량 대비 경쟁이 적어 노출 가능성 높음
-- 제목 길이 25~40자
-- 특수문자 없이 깔끔하게
-- 각 제목은 서로 다른 키워드 조합으로
+- 앞쪽에 검색량 높은 키워드 배치
+- 경쟁도 낮음/중간 키워드 우선
+- 25~40자, 특수문자 없이
+- 각각 다른 키워드 조합
 """

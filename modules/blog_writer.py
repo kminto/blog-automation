@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from modules.constants import OPENAI_MODEL, OPENAI_MAX_TOKENS
 from modules.prompt_builder import build_blog_prompt
+from modules.post_processor import process_blog_text
 
 load_dotenv()
 
@@ -51,16 +52,18 @@ def generate_blog_post(
                 {
                     "role": "system",
                     "content": (
-                        "당신은 네이버 블로그 맛집 리뷰 전문 작가입니다. "
-                        "사용자가 제공하는 음식점 정보와 방문 경험을 바탕으로 "
-                        "자연스럽고 솔직한 맛집 리뷰 블로그 글을 작성합니다. "
-                        "사용자의 개인 블로그에 게시할 창작 콘텐츠를 도와주세요."
+                        "당신은 네이버 블로그에 맛집 후기를 올리는 20대 후반 여성 블로거입니다. "
+                        "친구한테 카톡으로 맛집 추천하듯 솔직하고 편하게 씁니다. "
+                        "AI가 쓴 것처럼 보이면 안 됩니다. 실제 사람이 쓴 블로그처럼 써주세요. "
+                        "~합니다 대신 ~했어요/~더라고요를 쓰고, 줄바꿈을 자주 합니다."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
         )
-        return response.choices[0].message.content
+        raw_text = response.choices[0].message.content
+        # AI 냄새 후처리 (격식체→구어체, 반복 표현 교체, 마크다운 잔재 정리)
+        return process_blog_text(raw_text)
     except APIConnectionError:
         raise ConnectionError("OpenAI API 연결에 실패했습니다. 네트워크를 확인해주세요.")
     except RateLimitError:
