@@ -113,3 +113,119 @@ def expand_memo(short_memo: str, section: str = "일반") -> str:
     )
 
     return response.choices[0].message.content.strip()
+
+
+def expand_all_inputs(inputs: dict) -> dict:
+    """모든 짧은 입력을 한 번에 확장한다.
+
+    Args:
+        inputs: {
+            "ordered_menus": "양꼬치 - 맛있음, 생맥주 - 고기랑 찰떡",
+            "best": "채끝",
+            "worst": "양 적음",
+            "episode": "옆테이블에서 뭐먹냐고 물어봄",
+            "companion": "친구 2명",
+            "mood": "깔끔 넓은 테이블",
+            "memo": "주차 불편, 예약 필수",
+        }
+
+    Returns:
+        각 항목이 3~4줄로 확장된 dict
+    """
+    profile = get_style_profile()
+    style_hint = ""
+    if profile:
+        endings = [e[0] for e in profile.get("top_endings", [])[:4]]
+        expressions = [e[0] for e in profile.get("top_expressions", [])[:4]]
+        colloquials = [e[0] for e in profile.get("top_colloquials", [])[:5]]
+        samples = profile.get("sample_sentences", [])[:5]
+        sample_text = "\n".join([f'  "{s}"' for s in samples])
+
+        style_hint = f"""내 말투:
+어미: {", ".join(endings)} / 감탄사: {", ".join(expressions)} / 구어체: {", ".join(colloquials)}
+내 문장 예시:
+{sample_text}"""
+
+    # 입력을 하나의 프롬프트로 묶어서 API 1회로 처리 (비용 절약)
+    items = []
+    for key, value in inputs.items():
+        if value and value.strip():
+            items.append(f"[{key}] {value.strip()}")
+
+    if not items:
+        return inputs
+
+    joined = "\n".join(items)
+
+    section_guides = {
+        "ordered_menus": "주문 메뉴별 맛 감상 (메뉴명 - 한줄평 형식 유지, 각 메뉴 2~3줄로 확장)",
+        "best": "제일 맛있었던 것 감상 (2줄로 확장)",
+        "worst": "아쉬웠던 점 솔직하게 (2줄로 확장, 너무 나쁘지 않게)",
+        "episode": "에피소드/일화 (2~3줄로 확장, 생생하게)",
+        "companion": "동행인 정보 (1줄 유지)",
+        "mood": "분위기/인테리어 묘사 (3~4줄로 확장)",
+        "memo": "추가 정보 (2~3줄로 확장)",
+    }
+    guides_text = "\n".join([f"  {k}: {v}" for k, v in section_guides.items()])
+
+    client = _get_client()
+    response = client.chat.completions.create(
+        model=EXPAND_MODEL,
+        max_tokens=800,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "네이버 블로그 맛집 리뷰어의 말투로 짧은 메모를 확장한다. "
+                    "~합니다/~됩니다 금지. ~했어요/~더라고요/~같아요 위주. "
+                    "새 정보를 지어내지 말고 메모 내용만 말투를 살려서 늘려줘. "
+                    "각 항목을 [key] 태그로 구분해서 출력."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"""아래 짧은 메모들을 각각 내 블로그 말투로 확장해줘.
+각 항목은 [key] 태그로 시작해.
+
+{style_hint}
+
+확장 가이드:
+{guides_text}
+
+입력:
+{joined}
+
+출력 (각 항목 [key]로 시작):""",
+            },
+        ],
+    )
+
+    raw = response.choices[0].message.content.strip()
+
+    # 파싱: [key] 태그로 분리
+    result = dict(inputs)
+    current_key = None
+    current_lines = []
+
+    for line in raw.split("\n"):
+        stripped = line.strip()
+        # [key] 패턴 감지
+        if stripped.startswith("[") and "]" in stripped:
+            # 이전 키 저장
+            if current_key and current_lines:
+                result[current_key] = "\n".join(current_lines).strip()
+            # 새 키 시작
+            tag_end = stripped.index("]")
+            current_key = stripped[1:tag_end]
+            rest = stripped[tag_end + 1:].strip()
+            current_lines = [rest] if rest else []
+        else:
+            if current_key:
+                current_lines.append(stripped)
+
+    # 마지막 키 저장
+    if current_key and current_lines:
+        result[current_key] = "\n".join(current_lines).strip()
+
+    return result
+

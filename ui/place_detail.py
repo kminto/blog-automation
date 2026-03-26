@@ -1,6 +1,6 @@
 """
 음식점 상세 정보 및 입력 폼 모듈
-선택된 음식점의 정보를 표시하고 후기/메뉴 입력 폼을 렌더링한다.
+짧은 메모만 적으면 → 내 말투로 자동 확장 → 블로그 글 생성.
 """
 
 import streamlit as st
@@ -12,19 +12,14 @@ from modules.photo_analyzer import (
     extract_menus_from_analysis,
     extract_descriptions_from_analysis,
 )
-from modules.memo_expander import expand_memo
+from modules.memo_expander import expand_all_inputs
 from ui.helpers import build_my_review, build_auto_memo
 from ui.photo_section import render_photo_section
 from utils.api_utils import safe_api_call
 
 
 def render_place_detail(on_analyze, on_generate):
-    """선택된 음식점 상세 정보를 표시하고 입력 폼을 렌더링한다.
-
-    Args:
-        on_analyze: 키워드 분석 콜백 (region_list, menu_list)
-        on_generate: 본문 생성 콜백 (name, regions, menus, companion, mood, memo, ordered, review)
-    """
+    """선택된 음식점 상세 정보를 표시하고 간소화된 입력 폼을 렌더링한다."""
     info = st.session_state.place_detail
 
     st.subheader(f"🏪 {info['name']}")
@@ -45,7 +40,6 @@ def render_place_detail(on_analyze, on_generate):
         st.markdown(f"**🍽️ 메뉴:** {', '.join(info['menus'][:10])}")
 
     st.divider()
-    st.subheader("✏️ 정보 수정 및 추가")
 
     # 지역/메뉴 자동 추출
     auto_regions = extract_region_from_address(
@@ -58,114 +52,113 @@ def render_place_detail(on_analyze, on_generate):
 
     regions = st.text_input("지역 (쉼표 구분)", value=", ".join(auto_regions), key="input_regions")
     menus = st.text_input("대표 메뉴 (쉼표 구분)", value=", ".join(auto_menus[:5]), key="input_menus")
+
+    # ==============================================
+    # 간소화된 입력 (짧게 적으면 내 말투로 자동 확장)
+    # ==============================================
+    st.subheader("✏️ 간단히 적으면 내 말투로 자동 확장돼요")
+    st.caption("키워드만 적어도 OK! 🪄 버튼 누르면 3~4줄로 늘려줘요")
+
     ordered_menus = st.text_area(
-        "🍽 내가 주문한 메뉴 (줄바꿈, 메뉴명 - 내 한줄평)",
-        placeholder="예:\nA코스 - 육사시미가 입에서 녹았음, 막창은 좀 질겼음\n생맥주 - 고기랑 찰떡, 2잔 마심",
-        height=120,
+        "🍽 주문한 메뉴 - 한줄평",
+        placeholder="양꼬치 - 맛있음, 숯불향 좋음\n생맥주 - 고기랑 찰떡\n볶음밥 - 마지막에 먹으면 꿀",
+        height=100,
         key="input_ordered",
     )
 
-    # 분류형 후기 입력
-    st.markdown("**📝 내 솔직 후기**")
     col_r1, col_r2 = st.columns(2)
     with col_r1:
-        review_vibe = st.selectbox(
-            "핵심 포인트",
-            ["가성비 좋음", "고급짐/특별한 날", "양 많음", "맛은 좋은데 비쌈",
-             "동네 단골각", "데이트 맛집", "가족모임 적합", "혼밥 가능"],
-            key="review_vibe",
-        )
-        review_cook = st.selectbox(
-            "조리 방식",
-            ["직원이 구워줌", "내가 직접 구움", "이미 조리돼서 나옴",
-             "셰프가 눈앞에서 조리", "셀프바/뷔페", "해당없음"],
-            key="review_cook",
-        )
+        review_best = st.text_input("👍 제일 맛있었던 것", placeholder="채끝 미쳤음", key="review_best")
+        review_worst = st.text_input("👎 아쉬웠던 점", placeholder="양 적음, 소스 아쉬움", key="review_worst")
     with col_r2:
-        review_wait = st.selectbox(
-            "웨이팅",
-            ["웨이팅 없음", "5~10분 대기", "10~30분 대기",
-             "30분 이상 대기", "예약해서 바로 입장"],
-            key="review_wait",
-        )
-        review_revisit = st.selectbox(
-            "재방문 의사",
-            ["무조건 재방문", "가끔 올만함", "한번은 갈만함",
-             "글쎄.. 다음엔 다른데", "비추"],
-            key="review_revisit",
-        )
+        companion = st.text_input("👫 동행", placeholder="친구 2명", key="input_companion")
+        review_episode = st.text_input("💬 에피소드", placeholder="옆테이블에서 뭐먹냐고 물어봄", key="review_episode")
 
-    review_best = st.text_input(
-        "제일 맛있었던 메뉴",
-        placeholder="예: 채끝이 미쳤음, 육사시미 녹았음",
-        key="review_best",
-    )
-    review_worst = st.text_input(
-        "아쉬웠던 점 (솔직하게)",
-        placeholder="예: 특양 질김, 소스 아쉬움, 양 적음",
-        key="review_worst",
-    )
-    review_episode = st.text_input(
-        "기억나는 에피소드 (선택)",
-        placeholder="예: 옆테이블에서 뭐먹냐고 물어봄 ㅋㅋ",
-        key="review_episode",
-    )
-    review_free = st.text_area(
-        "추가로 하고싶은 말 (자유)",
-        placeholder="예: 솥밥 하나 더 시킬뻔 ㅋㅋ",
+    mood = st.text_input("✨ 분위기/내부", placeholder="깔끔, 테이블 넓음, 회식 좋음", key="input_mood")
+
+    # 빠른 선택 (접을 수 있게)
+    with st.expander("📋 빠른 선택 (선택사항)", expanded=False):
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            review_vibe = st.selectbox(
+                "핵심 포인트",
+                ["가성비 좋음", "고급짐/특별한 날", "양 많음", "맛은 좋은데 비쌈",
+                 "동네 단골각", "데이트 맛집", "가족모임 적합", "혼밥 가능"],
+                key="review_vibe",
+            )
+            review_cook = st.selectbox(
+                "조리 방식",
+                ["직원이 구워줌", "내가 직접 구움", "이미 조리돼서 나옴",
+                 "셰프가 눈앞에서 조리", "셀프바/뷔페", "해당없음"],
+                key="review_cook",
+            )
+        with col_s2:
+            review_wait = st.selectbox(
+                "웨이팅",
+                ["웨이팅 없음", "5~10분 대기", "10~30분 대기",
+                 "30분 이상 대기", "예약해서 바로 입장"],
+                key="review_wait",
+            )
+            review_revisit = st.selectbox(
+                "재방문 의사",
+                ["무조건 재방문", "가끔 올만함", "한번은 갈만함",
+                 "글쎄.. 다음엔 다른데", "비추"],
+                key="review_revisit",
+            )
+
+    memo = st.text_area(
+        "📝 추가 메모",
+        value=build_auto_memo(info),
         height=80,
-        key="review_free",
+        key="input_memo",
     )
 
-    my_review = build_my_review(
-        review_vibe, review_cook, review_wait, review_revisit,
-        review_best, review_worst, review_episode, review_free,
-    )
-
-    companion = st.text_input("방문 인원/동행", placeholder="예: 친구 2명")
-
-    # 짧은 메모 → 내 말투 자동 확장 섹션
-    st.markdown("**✏️ 짧은 메모 → 내 말투로 자동 확장**")
-    st.caption("키워드만 적으면 내 블로그 말투로 3~4줄로 늘려줘요")
-
-    expand_cols = st.columns([3, 1])
-    with expand_cols[0]:
-        expand_input = st.text_input(
-            "짧은 메모",
-            placeholder="예: 깔끔하고 테이블 넓어 회식 좋음, 주차 불편",
-            key="expand_input",
-        )
-    with expand_cols[1]:
-        expand_section = st.selectbox(
-            "섹션",
-            ["내부", "외관", "분위기", "주차", "메뉴판", "총평", "일반"],
-            key="expand_section",
-        )
-
-    if expand_input and st.button("🪄 내 말투로 확장", key="btn_expand"):
-        with st.spinner("확장 중..."):
-            expanded = safe_api_call(expand_memo, expand_input, expand_section)
-        if expanded["success"]:
-            st.session_state["last_expanded"] = expanded["data"]
+    # 🪄 일괄 확장 버튼
+    if st.button("🪄 내 말투로 일괄 확장", use_container_width=True, key="btn_expand_all"):
+        raw_inputs = {
+            "ordered_menus": ordered_menus,
+            "best": review_best,
+            "worst": review_worst,
+            "episode": review_episode,
+            "mood": mood,
+            "memo": memo,
+        }
+        # 빈 항목 제외
+        filled = {k: v for k, v in raw_inputs.items() if v and v.strip()}
+        if not filled:
+            st.warning("최소 한 항목은 입력해주세요.")
         else:
-            st.error(f"확장 실패: {expanded['error']}")
+            with st.spinner("🪄 내 말투로 확장 중... (5~10초)"):
+                expanded = safe_api_call(expand_all_inputs, filled)
+            if expanded["success"]:
+                st.session_state["expanded_inputs"] = expanded["data"]
+                st.success("확장 완료!")
+                st.rerun()
+            else:
+                st.error(f"확장 실패: {expanded['error']}")
 
-    if st.session_state.get("last_expanded"):
-        st.text_area(
-            "확장 결과 (복사해서 메모에 붙여넣기)",
-            value=st.session_state["last_expanded"],
-            height=120,
-            key="expanded_result",
-        )
-
-    mood = st.text_input("분위기", placeholder="예: 조용함, 가족 분위기")
-    memo = st.text_area("추가 메모 (선택)", value=build_auto_memo(info), key="input_memo")
+    # 확장 결과 표시
+    if st.session_state.get("expanded_inputs"):
+        exp = st.session_state["expanded_inputs"]
+        with st.expander("🪄 확장 결과 미리보기 (수정 가능)", expanded=True):
+            for key, value in exp.items():
+                if value:
+                    label_map = {
+                        "ordered_menus": "🍽 메뉴 리뷰",
+                        "best": "👍 맛있었던 것",
+                        "worst": "👎 아쉬운 점",
+                        "episode": "💬 에피소드",
+                        "mood": "✨ 분위기",
+                        "memo": "📝 메모",
+                    }
+                    label = label_map.get(key, key)
+                    st.text_area(label, value=value, height=80, key=f"exp_{key}")
 
     st.divider()
 
     # 사진 업로드 + AI 분석
-    with st.expander("📸 사진 업로드 (AI가 자동 분석)", expanded=True):
-        st.caption("촬영 순서대로 올려주세요: 외관 → 내부 → 메뉴판 → 반찬 → 메인 → 사이드")
+    with st.expander("📸 사진 업로드 (AI가 자동 분석)", expanded=False):
+        st.caption("촬영 순서: 외관 → 내부 → 메뉴판 → 반찬 → 메인 → 사이드")
         uploaded = st.file_uploader(
             "사진 선택 (여러 장 가능)",
             type=["jpg", "jpeg", "png", "webp"],
@@ -175,7 +168,7 @@ def render_place_detail(on_analyze, on_generate):
 
         if uploaded and st.button("🔍 사진 AI 분석", use_container_width=True, key="btn_photo_analyze"):
             photo_data = [{"name": f.name, "bytes": f.read()} for f in uploaded]
-            with st.spinner(f"{len(photo_data)}장 분석 중... (10~20초)"):
+            with st.spinner(f"{len(photo_data)}장 분석 중..."):
                 result = safe_api_call(analyze_photos, photo_data)
             if result["success"]:
                 st.session_state["photo_analysis"] = result["data"]
@@ -184,29 +177,23 @@ def render_place_detail(on_analyze, on_generate):
             else:
                 st.error(f"사진 분석 실패: {result['error']}")
 
-        # 분석 결과 표시
         if st.session_state.get("photo_analysis"):
             analysis = st.session_state["photo_analysis"]
-            category_icons = {
-                "외관": "🏪", "내부": "🪑", "메뉴판": "📋",
-                "세팅": "🥢", "메인음식": "🍽", "사이드": "🍺", "기타": "📷",
-            }
+            icons = {"외관": "🏪", "내부": "🪑", "메뉴판": "📋", "세팅": "🥢",
+                     "메인음식": "🍽", "사이드": "🍺", "기타": "📷"}
             for item in analysis:
                 cat = item.get("category", "기타")
-                icon = category_icons.get(cat, "📷")
                 food = f" **{item['food_name']}**" if item.get("food_name") else ""
-                st.markdown(f"{icon} `{cat}`{food} — {item.get('description', '')}")
+                st.markdown(f"{icons.get(cat, '📷')} `{cat}`{food} — {item.get('description', '')}")
 
-            # 자동 채우기 버튼
             if st.button("✨ 분석 결과로 자동 채우기", key="btn_auto_fill"):
-                detected_menus = extract_menus_from_analysis(analysis)
-                detected_desc = extract_descriptions_from_analysis(analysis)
-                if detected_menus:
-                    st.session_state["input_ordered"] = detected_desc
-                    st.session_state["input_menus"] = ", ".join(detected_menus)
+                detected = extract_menus_from_analysis(analysis)
+                desc = extract_descriptions_from_analysis(analysis)
+                if detected:
+                    st.session_state["input_ordered"] = desc
+                    st.session_state["input_menus"] = ", ".join(detected)
                 st.rerun()
 
-    # 촬영 가이드
     with st.expander("📸 촬영 가이드 (참고용)", expanded=False):
         render_photo_section()
 
@@ -233,7 +220,24 @@ def render_place_detail(on_analyze, on_generate):
         else:
             region_list = parse_comma_separated(regions)
             menu_list = parse_comma_separated(menus)
+
+            # 확장 결과가 있으면 확장된 내용 사용
+            exp = st.session_state.get("expanded_inputs", {})
+            final_ordered = exp.get("ordered_menus", ordered_menus)
+            final_mood = exp.get("mood", mood)
+            final_memo = exp.get("memo", memo)
+
+            # 후기 조합 (확장 + 빠른 선택)
+            my_review = build_my_review(
+                review_vibe, review_cook, review_wait, review_revisit,
+                exp.get("best", review_best),
+                exp.get("worst", review_worst),
+                exp.get("episode", review_episode),
+                "",
+            )
+
             on_generate(
                 info["name"], region_list, menu_list,
-                companion, mood, memo, ordered_menus, my_review,
+                companion, final_mood, final_memo,
+                final_ordered, my_review,
             )
