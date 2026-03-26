@@ -1,30 +1,33 @@
 """
 상수 정의 모듈
-키워드 점수 계산, 경쟁도 가중치, 트렌드 가중치 등 시스템 전역 상수를 관리한다.
+2026년 네이버 C-Rank/D.I.A+ 알고리즘 기반 SEO 최적화 상수.
 """
 
-# === 경쟁도(compIdx) 가중치 (차이를 크게 벌려서 낮은 경쟁도 키워드가 유리하도록) ===
+# === 경쟁도(compIdx) 가중치 ===
+# 롱테일 키워드 극대화: 낮은 경쟁도에 6배 유리하게 설정
 COMPETITION_WEIGHTS = {
-    "낮음": 0.5,
+    "낮음": 0.3,   # 롱테일 키워드 최우선 (기존 0.5 → 0.3)
     "중간": 1.0,
-    "높음": 2.0,
+    "높음": 2.5,   # 경쟁 치열한 키워드 더 강한 페널티 (기존 2.0 → 2.5)
 }
 
 # === 트렌드 가중치 ===
 TREND_WEIGHTS = {
-    "상승": 1.5,   # 최근 검색량 증가 키워드 가산
-    "유지": 1.0,   # 변동 없음
-    "하락": 0.6,   # 검색량 감소 키워드 페널티
+    "상승": 1.8,   # 상승 트렌드 더 크게 가산 (기존 1.5 → 1.8)
+    "유지": 1.0,
+    "하락": 0.4,   # 하락 트렌드 더 강한 페널티 (기존 0.6 → 0.4)
 }
 
-# === 키워드 점수 공식 ===
-# final_score = (search_volume * trend_weight) / competition_weight
-# 경쟁도 낮음(0.5)은 높음(2.0)보다 4배 유리 → 롱테일 키워드 부각
-# search_volume = monthlyPcQcCnt + monthlyMobileQcCnt
+# === 키워드 점수 공식 (D.I.A+ 반영) ===
+# final_score = (search_volume * trend_weight * longtail_bonus) / competition_weight
+# 롱테일 보너스: 3~5단어 키워드에 가산점
+# 최소 유의미 검색량: 월 30회 (30 미만은 유입 기대 어려움)
+MIN_SEARCH_VOLUME = 30  # 최소 유의미 검색량 (기존 100 → 30)
+LONGTAIL_BONUS = 1.3     # 3단어 이상 롱테일 키워드 가산
 
 # === 키워드 조합 제한 ===
-MAX_KEYWORD_COMBINATIONS = 50  # API에 보낼 최대 키워드 조합 수
-TOP_KEYWORDS_FOR_CONTENT = 10  # 본문 생성에 사용할 상위 키워드 수
+MAX_KEYWORD_COMBINATIONS = 50
+TOP_KEYWORDS_FOR_CONTENT = 10
 
 # === 상황 키워드 ===
 SITUATION_KEYWORDS = [
@@ -38,9 +41,17 @@ OPENAI_MAX_TOKENS = 8192
 
 # === 데이터랩 API 설정 ===
 DATALAB_TIME_UNIT = "week"
-DATALAB_PERIOD_MONTHS = 3  # 최근 3개월 트렌드 분석
+DATALAB_PERIOD_MONTHS = 3
 
-# === 블로그 생성 설정 ===
-TITLE_COUNT = 5          # 제목 후보 수
-HASHTAG_MIN = 18         # 최소 해시태그 수
-HASHTAG_MAX = 22         # 최대 해시태그 수
+# === 블로그 생성 설정 (2026 SEO 기준) ===
+TITLE_COUNT = 5
+TITLE_MIN_LENGTH = 20    # 제목 최소 길이 (기존 25 → 20)
+TITLE_MAX_LENGTH = 25    # 제목 최대 길이 (기존 40 → 25, 모바일 잘림 방지)
+HASHTAG_MIN = 5          # 최소 해시태그 (기존 18 → 5)
+HASHTAG_MAX = 9          # 최대 해시태그 (기존 22 → 9, 10개 이상 무의미)
+PHOTO_MIN = 5            # 최소 사진 수 (기존 12 → 5)
+PHOTO_MAX = 10           # 최대 사진 수 (다양한 앵글, 과다 금지)
+
+# === 키워드 밀도 (D.I.A+ 기준) ===
+KEYWORD_DENSITY_TARGET = 0.015  # 본문 대비 1.5% (과하면 스팸 판정)
+KEYWORD_MAX_REPEAT = 5          # 동일 키워드 최대 반복 횟수

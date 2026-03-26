@@ -7,6 +7,8 @@ from modules.constants import (
     COMPETITION_WEIGHTS,
     TREND_WEIGHTS,
     TOP_KEYWORDS_FOR_CONTENT,
+    MIN_SEARCH_VOLUME,
+    LONGTAIL_BONUS,
 )
 
 
@@ -29,20 +31,33 @@ def get_competition_weight(comp_idx: str) -> float:
     return COMPETITION_WEIGHTS.get(comp_idx, 1.0)
 
 
+def _calc_longtail_bonus(keyword: str) -> float:
+    """롱테일 키워드(3단어 이상)에 가산점을 부여한다."""
+    # 공백 기준 단어 수 또는 키워드 길이로 판단
+    word_count = len(keyword.split())
+    char_count = len(keyword.replace(" ", ""))
+    # 6자 이상이면서 조합 키워드면 롱테일로 판단
+    if word_count >= 2 or char_count >= 6:
+        return LONGTAIL_BONUS
+    return 1.0
+
+
 def score_keyword(
     keyword_data: dict,
     trend: str = "유지",
 ) -> dict:
-    """단일 키워드의 최종 점수를 계산한다."""
+    """단일 키워드의 최종 점수를 계산한다. (D.I.A+ 기반)"""
     search_volume = calculate_search_volume(keyword_data)
     comp_weight = get_competition_weight(keyword_data.get("compIdx", "중간"))
     trend_weight = TREND_WEIGHTS.get(trend, 1.0)
+    keyword = keyword_data.get("relKeyword", "")
+    longtail = _calc_longtail_bonus(keyword)
 
-    # 점수 공식: (검색량 * 트렌드 가중치) / 경쟁도 가중치
-    final_score = (search_volume * trend_weight) / comp_weight
+    # 점수 공식: (검색량 * 트렌드 * 롱테일 보너스) / 경쟁도
+    final_score = (search_volume * trend_weight * longtail) / comp_weight
 
     return {
-        "keyword": keyword_data.get("relKeyword", ""),
+        "keyword": keyword,
         "search_volume": search_volume,
         "competition": keyword_data.get("compIdx", "중간"),
         "trend": trend,
@@ -103,8 +118,8 @@ def rank_keywords(
         reverse=True,
     )
 
-    # 경쟁도별 분류 (최소 검색량 100 이상만)
-    MIN_VOLUME = 100
+    # 경쟁도별 분류 (최소 유의미 검색량 이상만)
+    MIN_VOLUME = MIN_SEARCH_VOLUME
     low_mid = [
         kw for kw in sorted_keywords
         if kw["competition"] in ("낮음", "중간") and kw["search_volume"] >= MIN_VOLUME
