@@ -199,6 +199,66 @@ def analyze_style(samples: list[dict] = None) -> dict:
         for char in match.group():
             emoji_counter[char] += 1
 
+    # 7) 문장 시작 패턴 (첫 2~3글자)
+    start_counter = Counter()
+    for s in sentences:
+        if len(s) >= 4:
+            # 구어체 시작 패턴 추출
+            for starter in ["근데", "사실", "아무래도", "여튼", "참고로",
+                            "개인적으로", "솔직히", "저희는", "저는", "이건",
+                            "그래서", "확실히", "드디어", "아 그리고"]:
+                if s.startswith(starter):
+                    start_counter[starter] += 1
+
+    # 8) 사진 설명 말투 추출
+    photo_descriptions = re.findall(
+        r'\[사진[:\s]*([^\]]+)\]', all_text,
+    )
+    # 움짤 설명도
+    gif_descriptions = re.findall(
+        r'\[움짤[:\s]*([^\]]+)\]', all_text,
+    )
+
+    # 9) 섹션별 문장 분류
+    section_sentences = {
+        "도입부": [],  # 글 시작 3~5줄
+        "메뉴리뷰": [],  # 메뉴명 뒤 감상
+        "총평": [],  # 마무리
+    }
+    for sample in samples:
+        lines = [l.strip() for l in sample["text"].split("\n") if l.strip()]
+        # 도입부 (첫 5줄)
+        for line in lines[:5]:
+            if len(line) > 5 and not line.startswith("#") and not line.startswith("["):
+                section_sentences["도입부"].append(line)
+        # 마무리 (끝 5줄)
+        for line in lines[-5:]:
+            if len(line) > 5 and not line.startswith("#"):
+                section_sentences["총평"].append(line)
+        # 메뉴 리뷰 (메뉴 소제목 뒤 3줄)
+        for i, line in enumerate(lines):
+            if "🍽" in line or "🍺" in line or "메인" in line:
+                for j in range(i + 1, min(i + 4, len(lines))):
+                    if len(lines[j]) > 5 and not lines[j].startswith("["):
+                        section_sentences["메뉴리뷰"].append(lines[j])
+
+    # 10) 자주 쓰는 문장 틀 (빈칸 패턴)
+    sentence_templates = []
+    template_patterns = [
+        (r'저희는 .+했는데요', "저희는 ~했는데요"),
+        (r'개인적으로 .+같아요', "개인적으로 ~같아요"),
+        (r'.+추천드려요', "~추천드려요"),
+        (r'.+먹어봐야 .+', "~먹어봐야 ~"),
+        (r'다음에.+먹어볼', "다음에 ~먹어볼"),
+        (r'.+하기 좋은', "~하기 좋은"),
+        (r'솔직히 .+', "솔직히 ~"),
+        (r'.+느낌이었어요', "~느낌이었어요"),
+    ]
+    for pattern, label in template_patterns:
+        count = len(re.findall(pattern, all_text))
+        if count > 0:
+            sentence_templates.append({"pattern": label, "count": count})
+
     profile = {
         "blog_id": samples[0].get("logNo", "unknown") if samples else "unknown",
         "sample_count": len(samples),
@@ -213,6 +273,15 @@ def analyze_style(samples: list[dict] = None) -> dict:
             "long_ratio": round(long_ratio * 100, 1),
         },
         "sample_sentences": interesting_sentences[:20],
+        "sentence_starters": start_counter.most_common(10),
+        "photo_descriptions": photo_descriptions[:15],
+        "gif_descriptions": gif_descriptions[:5],
+        "section_samples": {
+            "도입부": section_sentences["도입부"][:10],
+            "메뉴리뷰": section_sentences["메뉴리뷰"][:10],
+            "총평": section_sentences["총평"][:10],
+        },
+        "sentence_templates": sorted(sentence_templates, key=lambda x: x["count"], reverse=True)[:8],
     }
 
     # 프로필 저장
@@ -235,38 +304,93 @@ def build_style_prompt_from_profile(profile: dict) -> str:
     if not profile or "error" in profile:
         return ""
 
-    # 어미 패턴
-    endings = [f"{e[0]}({e[1]}회)" for e in profile.get("top_endings", [])[:6]]
-    endings_text = ", ".join(endings)
+    # 어미 패턴 (비율로 표현)
+    endings = profile.get("top_endings", [])[:8]
+    total_endings = sum(e[1] for e in endings) or 1
+    endings_lines = []
+    for e in endings:
+        pct = round(e[1] / total_endings * 100)
+        endings_lines.append(f"  {e[0]} ({pct}%) — 가장 {'자주' if pct > 15 else '가끔'} 사용")
+    endings_text = "\n".join(endings_lines)
 
-    # 감탄사
-    expressions = [f"{e[0]}({e[1]}회)" for e in profile.get("top_expressions", [])[:6]]
-    expr_text = ", ".join(expressions)
+    # 감탄사 (사용 빈도로 가이드)
+    expressions = profile.get("top_expressions", [])[:6]
+    expr_lines = []
+    for e in expressions:
+        freq = "매우 자주" if e[1] > 100 else "자주" if e[1] > 30 else "가끔"
+        expr_lines.append(f"  {e[0]} — {freq} ({e[1]}회)")
+    expr_text = "\n".join(expr_lines)
 
     # 구어체
-    colloquials = [e[0] for e in profile.get("top_colloquials", [])[:8]]
+    colloquials = [e[0] for e in profile.get("top_colloquials", [])[:10]]
     colloq_text = ", ".join(colloquials)
 
     # 이모지
-    emojis = [e[0] for e in profile.get("top_emojis", [])[:8]]
-    emoji_text = " ".join(emojis)
+    emojis = profile.get("top_emojis", [])[:8]
+    emoji_text = ", ".join([f"{e[0]}({e[1]})" for e in emojis])
 
-    # 문장 길이
+    # 문장 스타일
     stats = profile.get("sentence_stats", {})
 
-    # 특색 있는 문장 샘플
-    samples = profile.get("sample_sentences", [])[:10]
+    # 문장 시작 패턴
+    starters = profile.get("sentence_starters", [])[:8]
+    starter_text = ", ".join([f'"{s[0]}"({s[1]})' for s in starters]) if starters else "없음"
+
+    # 사진 설명 말투
+    photos = profile.get("photo_descriptions", [])[:8]
+    photo_text = "\n".join([f'  [사진: {p}]' for p in photos]) if photos else "  (사진 설명 데이터 없음)"
+
+    # 섹션별 실제 문장
+    sections = profile.get("section_samples", {})
+    intro_samples = sections.get("도입부", [])[:5]
+    review_samples = sections.get("메뉴리뷰", [])[:5]
+    closing_samples = sections.get("총평", [])[:5]
+
+    intro_text = "\n".join([f'  "{s}"' for s in intro_samples]) if intro_samples else "  (없음)"
+    review_text = "\n".join([f'  "{s}"' for s in review_samples]) if review_samples else "  (없음)"
+    closing_text = "\n".join([f'  "{s}"' for s in closing_samples]) if closing_samples else "  (없음)"
+
+    # 문장 틀
+    templates = profile.get("sentence_templates", [])[:6]
+    template_text = ", ".join([f'"{t["pattern"]}"({t["count"]})' for t in templates]) if templates else "없음"
+
+    # 특색 문장
+    samples = profile.get("sample_sentences", [])[:15]
     sample_text = "\n".join([f'  - "{s}"' for s in samples])
 
-    return f"""[내 블로그 말투 분석 결과 - 이 패턴을 그대로 따라할 것]
+    return f"""[내 블로그 말투 완전 분석 - {profile.get('sample_count', 0)}편 / {profile.get('total_chars', 0):,}자 기반]
 
-자주 쓰는 문장 끝: {endings_text}
-자주 쓰는 감탄사: {expr_text}
-자주 쓰는 구어체: {colloq_text}
-자주 쓰는 이모지: {emoji_text}
-문장 평균 길이: {stats.get('avg_length', 0)}자 (짧은 문장 {stats.get('short_ratio', 0)}%, 긴 문장 {stats.get('long_ratio', 0)}%)
+1. 문장 끝 어미 (이 비율대로 사용할 것):
+{endings_text}
 
-내가 실제로 쓴 문장들 (이 톤을 그대로 유지):
+2. 감탄사/특수문자 (이 빈도를 따를 것):
+{expr_text}
+
+3. 자주 쓰는 구어체: {colloq_text}
+
+4. 문장 시작 패턴: {starter_text}
+
+5. 자주 쓰는 문장 틀: {template_text}
+
+6. 문장 스타일:
+  평균 {stats.get('avg_length', 0)}자 / 짧은 문장 {stats.get('short_ratio', 0)}% / 긴 문장 {stats.get('long_ratio', 0)}%
+  → 1~2줄 단문 위주, 3줄 이상 이어지면 안 됨
+
+7. 이모지: {emoji_text}
+
+8. 사진 설명 말투 (이렇게 쓸 것):
+{photo_text}
+
+9. 도입부에서 자주 쓰는 말:
+{intro_text}
+
+10. 메뉴 리뷰에서 자주 쓰는 말:
+{review_text}
+
+11. 총평/마무리에서 자주 쓰는 말:
+{closing_text}
+
+12. 내가 실제로 쓴 특색 문장 (이 톤을 복제할 것):
 {sample_text}
 """
 
