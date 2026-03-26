@@ -1,6 +1,7 @@
 """
 맛집 블로그 자동화 시스템 - 메인 Streamlit 앱
 UI 컴포넌트를 조합하여 전체 워크플로우를 오케스트레이션한다.
+Supabase DB로 작성 중인 글 자동 저장/복원.
 """
 
 import streamlit as st
@@ -9,6 +10,7 @@ import pandas as pd
 from modules.validators import validate_env
 from modules.blog_advisor import get_today_topic
 from modules.pipeline import run_keyword_analysis, run_blog_generation
+from modules.db import is_db_available, save_draft, load_draft, clear_draft
 from ui.auth import check_authentication
 from ui.search import render_sidebar_search, handle_reset, handle_search, render_search_results
 from ui.place_detail import render_place_detail
@@ -43,7 +45,7 @@ if _today_topic and not _today_topic.get("done"):
 
 
 def _init_session_state():
-    """세션 상태를 초기화한다."""
+    """세션 상태를 초기화한다. DB에 저장된 draft가 있으면 복원."""
     defaults = {
         "keyword_results": None,
         "scored_keywords": None,
@@ -57,6 +59,46 @@ def _init_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
+    # DB에서 작성 중인 글 복원 (최초 1회)
+    if "draft_loaded" not in st.session_state and is_db_available():
+        draft = load_draft()
+        if draft and draft.get("restaurant_name"):
+            # 텍스트 필드 복원
+            restore_map = {
+                "input_regions": "regions",
+                "input_menus": "menus",
+                "input_ordered": "ordered_menus",
+                "review_best": "review_best",
+                "review_worst": "review_worst",
+                "review_episode": "review_episode",
+                "input_companion": "companion",
+                "input_mood": "mood",
+                "input_memo": "memo",
+                "review_vibe": "review_vibe",
+                "review_cook": "review_cook",
+                "review_wait": "review_wait",
+                "review_revisit": "review_revisit",
+            }
+            for session_key, db_key in restore_map.items():
+                if draft.get(db_key):
+                    st.session_state[session_key] = draft[db_key]
+
+            # JSON 필드 복원
+            if draft.get("scored_keywords"):
+                st.session_state["scored_keywords"] = draft["scored_keywords"]
+            if draft.get("blog_result"):
+                st.session_state["blog_result"] = draft["blog_result"]
+            if draft.get("hashtags"):
+                st.session_state["hashtags"] = draft["hashtags"]
+            if draft.get("expanded_inputs"):
+                st.session_state["expanded_inputs"] = draft["expanded_inputs"]
+            if draft.get("photo_analysis"):
+                st.session_state["photo_analysis"] = draft["photo_analysis"]
+
+            st.session_state["draft_restaurant_name"] = draft["restaurant_name"]
+
+        st.session_state["draft_loaded"] = True
+
 
 _init_session_state()
 
@@ -67,11 +109,20 @@ if missing_keys:
     st.info("`.env` 파일을 확인해주세요. `.env.example`을 참고하세요.")
     st.stop()
 
+# DB 상태 표시
+if is_db_available():
+    restored_name = st.session_state.get("draft_restaurant_name", "")
+    if restored_name:
+        st.caption(f"💾 이전 작성 중: **{restored_name}** (자동 복원됨)")
+else:
+    st.caption("⚠️ DB 미연결 - 새로고침 시 데이터 유실")
+
 # === 사이드바: 음식점 검색 ===
 with st.sidebar:
     search_query, btn_search, btn_reset = render_sidebar_search()
 
 if btn_reset:
+    clear_draft()
     handle_reset()
 
 if btn_search and search_query:
@@ -115,3 +166,7 @@ with st.sidebar:
     st.divider()
     with st.expander("📈 블로그 성장 대시보드", expanded=False):
         render_advisor_dashboard()
+
+# === DB 자동 저장 (매 렌더링마다) ===
+if is_db_available():
+    save_draft(st.session_state)
