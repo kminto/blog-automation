@@ -21,7 +21,28 @@ def blog_text_to_html(text: str) -> str:
             html_parts.append('<p><br></p>')
             continue
 
-        # [사진: 설명] → 사진 자리 표시
+        # "출처 입력" → 사진 삽입 자리 (네이버 에디터 형식)
+        if stripped == "출처 입력":
+            photo_counter += 1
+            html_parts.append(
+                f'<div style="background:#f5f5f5;'
+                f'border:2px dashed #ccc;'
+                f'padding:30px 20px;text-align:center;margin:16px 0;'
+                f'border-radius:8px;color:#666;font-size:14px;">'
+                f'<b style="font-size:18px;">📷 {photo_counter}번 사진</b><br>'
+                f'<span style="color:#999;">여기에 사진을 넣어주세요</span></div>'
+            )
+            continue
+
+        # "사진 설명을 입력하세요." → 캡션 자리
+        if stripped == "사진 설명을 입력하세요.":
+            html_parts.append(
+                f'<p style="color:#999;font-size:13px;text-align:center;'
+                f'margin:-8px 0 12px 0;">사진 설명을 입력하세요.</p>'
+            )
+            continue
+
+        # [사진: 설명] → 사진 자리 표시 (레거시 형식 호환)
         if stripped.startswith("[사진") or stripped.startswith("[움짤"):
             is_gif = stripped.startswith("[움짤")
             tag = "움짤" if is_gif else "사진"

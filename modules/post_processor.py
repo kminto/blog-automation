@@ -111,8 +111,10 @@ def _fix_markdown_remnants(text: str) -> str:
         # --- 구분선 제거
         if re.match(r'^---+\s*$', line):
             continue
-        # 목록 기호 제거 (사진/움짤 설명은 유지)
-        if not line.strip().startswith("[사진") and not line.strip().startswith("[움짤"):
+        # 목록 기호 제거 (사진/움짤/출처입력 설명은 유지)
+        s = line.strip()
+        if not s.startswith("[사진") and not s.startswith("[움짤") \
+                and s != "출처 입력" and s != "사진 설명을 입력하세요.":
             line = re.sub(r'^[\*\-]\s+', '', line)
         result.append(line)
 
@@ -131,7 +133,8 @@ def _fix_long_paragraphs(text: str) -> str:
             consecutive = 0
             result.append(line)
         elif stripped.startswith("[사진") or stripped.startswith("[움짤") or \
-             stripped.startswith("[운영정보") or stripped.startswith("위치 :"):
+             stripped.startswith("[운영정보") or stripped.startswith("위치 :") or \
+             stripped == "출처 입력" or stripped == "사진 설명을 입력하세요.":
             consecutive = 0
             result.append(line)
         else:
