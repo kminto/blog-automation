@@ -12,6 +12,7 @@ from modules.photo_analyzer import (
     extract_menus_from_analysis,
     extract_descriptions_from_analysis,
 )
+from modules.memo_expander import expand_memo
 from ui.helpers import build_my_review, build_auto_memo
 from ui.photo_section import render_photo_section
 from utils.api_utils import safe_api_call
@@ -122,6 +123,41 @@ def render_place_detail(on_analyze, on_generate):
     )
 
     companion = st.text_input("방문 인원/동행", placeholder="예: 친구 2명")
+
+    # 짧은 메모 → 내 말투 자동 확장 섹션
+    st.markdown("**✏️ 짧은 메모 → 내 말투로 자동 확장**")
+    st.caption("키워드만 적으면 내 블로그 말투로 3~4줄로 늘려줘요")
+
+    expand_cols = st.columns([3, 1])
+    with expand_cols[0]:
+        expand_input = st.text_input(
+            "짧은 메모",
+            placeholder="예: 깔끔하고 테이블 넓어 회식 좋음, 주차 불편",
+            key="expand_input",
+        )
+    with expand_cols[1]:
+        expand_section = st.selectbox(
+            "섹션",
+            ["내부", "외관", "분위기", "주차", "메뉴판", "총평", "일반"],
+            key="expand_section",
+        )
+
+    if expand_input and st.button("🪄 내 말투로 확장", key="btn_expand"):
+        with st.spinner("확장 중..."):
+            expanded = safe_api_call(expand_memo, expand_input, expand_section)
+        if expanded["success"]:
+            st.session_state["last_expanded"] = expanded["data"]
+        else:
+            st.error(f"확장 실패: {expanded['error']}")
+
+    if st.session_state.get("last_expanded"):
+        st.text_area(
+            "확장 결과 (복사해서 메모에 붙여넣기)",
+            value=st.session_state["last_expanded"],
+            height=120,
+            key="expanded_result",
+        )
+
     mood = st.text_input("분위기", placeholder="예: 조용함, 가족 분위기")
     memo = st.text_area("추가 메모 (선택)", value=build_auto_memo(info), key="input_memo")
 

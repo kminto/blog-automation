@@ -11,7 +11,7 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
-from modules.constants import OPENAI_MODEL
+PHOTO_ANALYSIS_MODEL = "gpt-4o-mini"  # 사진 분류는 mini로 충분, 비용 1/10
 
 load_dotenv()
 
@@ -88,7 +88,7 @@ JSON 형식:
 
     try:
         response = client.chat.completions.create(
-            model=OPENAI_MODEL,
+            model=PHOTO_ANALYSIS_MODEL,
             max_tokens=2000,
             messages=[
                 {
