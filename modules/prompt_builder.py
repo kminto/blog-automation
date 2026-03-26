@@ -122,6 +122,7 @@ def build_blog_prompt(
     mood: str,
     memo: str,
     top_keywords: list[dict],
+    photo_context: str = "",
 ) -> str:
     """블로그 본문 생성을 위한 프롬프트를 구성한다."""
 
@@ -203,6 +204,8 @@ def build_blog_prompt(
 - 내가 "맛없다", "아쉽다" 쓰면 그대로 반영 (좋게 바꾸지 말 것)
 - 내가 안 먹은 메뉴를 지어내지 말 것
 - 부족한 부분만 분위기/비주얼 묘사로 살짝 보충
+
+{photo_context}
 
 [이번 글의 톤 설정]
 {voice_guide}

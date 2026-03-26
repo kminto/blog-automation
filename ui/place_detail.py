@@ -7,8 +7,14 @@ import streamlit as st
 
 from modules.validators import parse_comma_separated
 from modules.place_search import extract_region_from_address, extract_menus_from_category
+from modules.photo_analyzer import (
+    analyze_photos,
+    extract_menus_from_analysis,
+    extract_descriptions_from_analysis,
+)
 from ui.helpers import build_my_review, build_auto_memo
 from ui.photo_section import render_photo_section
+from utils.api_utils import safe_api_call
 
 
 def render_place_detail(on_analyze, on_generate):
@@ -121,8 +127,51 @@ def render_place_detail(on_analyze, on_generate):
 
     st.divider()
 
-    # 사진 관리
-    with st.expander("📸 사진 관리 (촬영 가이드 + 업로드)", expanded=False):
+    # 사진 업로드 + AI 분석
+    with st.expander("📸 사진 업로드 (AI가 자동 분석)", expanded=True):
+        st.caption("촬영 순서대로 올려주세요: 외관 → 내부 → 메뉴판 → 반찬 → 메인 → 사이드")
+        uploaded = st.file_uploader(
+            "사진 선택 (여러 장 가능)",
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=True,
+            key="photo_upload",
+        )
+
+        if uploaded and st.button("🔍 사진 AI 분석", use_container_width=True, key="btn_photo_analyze"):
+            photo_data = [{"name": f.name, "bytes": f.read()} for f in uploaded]
+            with st.spinner(f"{len(photo_data)}장 분석 중... (10~20초)"):
+                result = safe_api_call(analyze_photos, photo_data)
+            if result["success"]:
+                st.session_state["photo_analysis"] = result["data"]
+                st.success(f"{len(result['data'])}장 분석 완료!")
+                st.rerun()
+            else:
+                st.error(f"사진 분석 실패: {result['error']}")
+
+        # 분석 결과 표시
+        if st.session_state.get("photo_analysis"):
+            analysis = st.session_state["photo_analysis"]
+            category_icons = {
+                "외관": "🏪", "내부": "🪑", "메뉴판": "📋",
+                "세팅": "🥢", "메인음식": "🍽", "사이드": "🍺", "기타": "📷",
+            }
+            for item in analysis:
+                cat = item.get("category", "기타")
+                icon = category_icons.get(cat, "📷")
+                food = f" **{item['food_name']}**" if item.get("food_name") else ""
+                st.markdown(f"{icon} `{cat}`{food} — {item.get('description', '')}")
+
+            # 자동 채우기 버튼
+            if st.button("✨ 분석 결과로 자동 채우기", key="btn_auto_fill"):
+                detected_menus = extract_menus_from_analysis(analysis)
+                detected_desc = extract_descriptions_from_analysis(analysis)
+                if detected_menus:
+                    st.session_state["input_ordered"] = detected_desc
+                    st.session_state["input_menus"] = ", ".join(detected_menus)
+                st.rerun()
+
+    # 촬영 가이드
+    with st.expander("📸 촬영 가이드 (참고용)", expanded=False):
         render_photo_section()
 
     st.divider()

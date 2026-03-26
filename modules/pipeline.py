@@ -14,6 +14,7 @@ from modules.hashtag_generator import generate_hashtags
 from modules.blog_advisor import add_posting_record
 from modules.keyword_cache import get_cached_keywords, save_to_cache, get_cache_stats
 from modules.post_processor import get_ai_score
+from modules.photo_analyzer import build_photo_context
 from utils.api_utils import safe_api_call
 
 
@@ -113,6 +114,12 @@ def run_blog_generation(
     if my_review and my_review.strip():
         full_memo += "\n\n[내 솔직 후기]\n" + my_review.strip()
 
+    # 사진 분석 결과가 있으면 프롬프트에 포함
+    photo_context = ""
+    if st.session_state.get("photo_analysis"):
+        photo_context = build_photo_context(st.session_state["photo_analysis"])
+        status.write(f"📸 사진 분석 데이터 {len(st.session_state['photo_analysis'])}장 포함")
+
     # 1단계: 본문 생성 (50%)
     status.update(label="ChatGPT가 블로그 글을 작성하고 있습니다...")
     status.write("gpt-4o 모델로 본문 생성 중... (10~20초 소요)")
@@ -125,6 +132,7 @@ def run_blog_generation(
         mood=mood,
         memo=full_memo,
         top_keywords=st.session_state.scored_keywords,
+        photo_context=photo_context,
     )
     if not result["success"]:
         status.update(label="본문 생성 오류", state="error")
