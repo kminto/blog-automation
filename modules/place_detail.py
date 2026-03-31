@@ -94,45 +94,81 @@ def fetch_place_detail(
     if not merged.get("telephone") and blog_info.get("telephone"):
         merged["telephone"] = blog_info["telephone"]
 
-    # 주차 상세 정보 수집 (블로그 2~3개에서 주차 관련 문장 추출)
-    parking_details = _fetch_parking_details(name)
-    if parking_details:
-        merged["parking_details"] = parking_details
+    # 시설 정보 수집 (블로그에서 주차/화장실/접근성/편의시설)
+    facility_info = _fetch_facility_info(name)
+    merged.update(facility_info)
 
     return merged
 
 
-def _fetch_parking_details(name: str) -> list[str]:
-    """블로그 검색에서 주차 관련 문장을 2~3개 추출한다."""
-    try:
-        response = requests.get(
-            BLOG_SEARCH_URL,
-            headers=_get_search_headers(),
-            params={"query": f"{name} 주차", "display": 5, "sort": "sim"},
-            timeout=10,
-        )
-        response.raise_for_status()
-        items = response.json().get("items", [])
-    except requests.RequestException:
-        return []
+def _fetch_facility_info(name: str) -> dict:
+    """블로그 검색에서 주차/화장실/접근성/편의시설 정보를 추출한다."""
+    # 시설 정보 카테고리별 검색 키워드와 필터
+    categories = {
+        "parking_details": {
+            "query": f"{name} 주차",
+            "must_contain": ["주차", "주차장", "무료", "유료", "발렛"],
+        },
+        "restroom_info": {
+            "query": f"{name} 화장실",
+            "must_contain": ["화장실", "위생", "깨끗", "청결", "비밀번호", "공용"],
+        },
+        "access_info": {
+            "query": f"{name} 위치 가는길",
+            "must_contain": ["역", "도보", "걸어", "버스", "지하철", "출구", "골목", "건물"],
+        },
+        "facilities_info": {
+            "query": f"{name} 단체 좌석",
+            "must_contain": ["유아", "아기", "단체", "룸", "콘센트", "와이파이", "좌석"],
+        },
+    }
 
-    parking_sentences = []
-    seen = set()
-    for item in items:
-        desc = _strip_html(item.get("description", ""))
-        sentences = [s.strip() for s in re.split(r"[.!?\n]", desc) if "주차" in s]
-        for s in sentences:
-            # 10자 이상, 60자 이하의 유의미한 문장만
-            # 가게와 무관한 문장 필터 (양재천, 카페 등)
-            noise = ["양재천", "카페", "커피", "화장실", "다른곳"]
-            if 10 < len(s) < 60 and s not in seen and not any(n in s for n in noise):
-                # 주차 관련 키워드가 충분히 있는 문장만
-                parking_words = ["주차", "무료", "유료", "가능", "불가", "주차장", "발렛", "건물"]
-                if sum(1 for w in parking_words if w in s) >= 1:
-                    seen.add(s)
-                    parking_sentences.append(s)
+    # 노이즈 필터 (관련 없는 문장 제거)
+    noise_words = [
+        "다른곳", "다른 곳", "예전에", "저번에",
+        "울었다", "장난", "뚜뚜", "옛땅", "경계지역",
+        "테라스 좌석은 깊은", "앞바다", "목포 앞",
+    ]
 
-    return parking_sentences[:3]
+    result = {}
+    for key, config in categories.items():
+        try:
+            response = requests.get(
+                BLOG_SEARCH_URL,
+                headers=_get_search_headers(),
+                params={"query": config["query"], "display": 5, "sort": "sim"},
+                timeout=10,
+            )
+            response.raise_for_status()
+            items = response.json().get("items", [])
+        except requests.RequestException:
+            continue
+
+        sentences = []
+        seen = set()
+        for item in items:
+            desc = _strip_html(item.get("description", ""))
+            for s in re.split(r"[.!?\n]", desc):
+                s = s.strip()
+                if len(s) < 8 or len(s) > 60 or s in seen:
+                    continue
+                if any(nw in s for nw in noise_words):
+                    continue
+                # 해당 카테고리 키워드가 있는 문장만
+                kw_hits = sum(1 for kw in config["must_contain"] if kw in s)
+                if kw_hits == 0:
+                    continue
+                # 한글 비율 체크 (역사/외국어 텍스트 필터)
+                hangul = sum(1 for c in s if '가' <= c <= '힣')
+                if hangul / max(len(s), 1) < 0.5:
+                    continue
+                seen.add(s)
+                sentences.append(s)
+
+        if sentences:
+            result[key] = sentences[:2]
+
+    return result
 
 
 def _fetch_from_blog_search(name: str) -> dict:

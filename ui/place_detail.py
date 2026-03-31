@@ -126,27 +126,37 @@ def render_place_detail(on_analyze, on_generate):
 
     st.caption("📍 지도 삽입 → 네이버 에디터에서 '지도' 버튼으로 직접 추가하세요")
 
+    # 블로그에서 자동 수집된 시설 정보를 기본값으로 표시
+    auto_parking = " / ".join(info.get("parking_details", []))
+    auto_restroom = " / ".join(info.get("restroom_info", []))
+    auto_access = " / ".join(info.get("access_info", []))
+    auto_facilities = " / ".join(info.get("facilities_info", []))
+
     col_m1, col_m2 = st.columns(2)
     with col_m1:
         parking_info = st.text_input(
-            "🅿️ 주차",
+            "🅿️ 주차 (자동 수집됨, 수정 가능)",
+            value=st.session_state.get("input_parking", auto_parking),
             placeholder="건물 지하 1시간 무료 / 근처 공영주차장 / 불가",
             key="input_parking",
         )
         access_info = st.text_input(
-            "🚇 접근성",
-            placeholder="판교역 도보 5분 / 버스 정류장 앞 / 골목 안쪽",
+            "🚇 접근성 (자동 수집됨, 수정 가능)",
+            value=st.session_state.get("input_access", auto_access),
+            placeholder="판교역 도보 5분 / 버스 정류장 앞",
             key="input_access",
         )
     with col_m2:
         restroom = st.text_input(
-            "🚻 화장실",
-            placeholder="매장 내 깨끗 / 건물 공용 / 비밀번호 있음",
+            "🚻 화장실 (자동 수집됨, 수정 가능)",
+            value=st.session_state.get("input_restroom", auto_restroom),
+            placeholder="매장 내 깨끗 / 건물 공용",
             key="input_restroom",
         )
         facilities = st.text_input(
-            "🪑 기타 편의시설",
-            placeholder="유아의자, 단체석, 콘센트, 와이파이",
+            "🪑 기타 편의시설 (자동 수집됨, 수정 가능)",
+            value=st.session_state.get("input_facilities", auto_facilities),
+            placeholder="유아의자, 단체석, 콘센트",
             key="input_facilities",
         )
 
