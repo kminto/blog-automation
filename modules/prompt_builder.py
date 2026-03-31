@@ -13,6 +13,7 @@ from modules.voice_bank import (
     get_random_transitions,
 )
 from modules.example_posts import EXAMPLE_POSTS
+from modules.gold_examples import get_best_gold_example
 from modules.style_learner import (
     get_style_profile,
     build_style_prompt_from_profile,
@@ -302,15 +303,18 @@ def build_blog_prompt(
 
     menu_text = ", ".join(menus)
 
-    # 학습된 내 블로그 예시가 있으면 우선 사용, 없으면 기본 예시
-    my_examples = get_best_example_posts(count=1)
-    if my_examples:
-        example = my_examples[0]
-        # 너무 길면 앞부분만 (3000자)
-        if len(example) > 3000:
-            example = example[:3000] + "\n\n(이하 생략)"
+    # 골드 예시(사용자 최종 수정본) > 크롤링 예시 > 기본 예시
+    gold = get_best_gold_example()
+    if gold:
+        example = gold
     else:
-        example = random.choice(EXAMPLE_POSTS)
+        my_examples = get_best_example_posts(count=1)
+        if my_examples:
+            example = my_examples[0]
+            if len(example) > 3000:
+                example = example[:3000] + "\n\n(이하 생략)"
+        else:
+            example = random.choice(EXAMPLE_POSTS)
 
     # 학습된 스타일 프로필
     style_profile = get_style_profile()
@@ -328,8 +332,8 @@ def build_blog_prompt(
 
 {style_prompt}
 
-[이 블로거가 실제로 쓴 글 - 말투와 문체만 참고할 것]
-주의: 아래 글의 음식점명, 지역, 메뉴는 절대 사용하지 말 것. 말투/어미/줄바꿈 패턴만 따라할 것.
+[이 블로거가 실제로 완성한 글 - 구조와 말투를 그대로 따라할 것]
+주의: 음식점명/지역/메뉴는 이번 글 정보로 교체. 아래 글의 구조(서론→매장→본론→결론), 줄바꿈 패턴, 사진 자리 배치, 문단 길이를 동일하게 복제할 것.
 {example}
 
 ---

@@ -5,6 +5,7 @@
 
 import streamlit as st
 
+from modules.gold_examples import save_gold_example
 from ui.helpers import parse_blog_sections
 
 
@@ -33,17 +34,26 @@ def render_blog_result():
             key="ta_titles",
         )
 
-    # 본문 (네이버 에디터 붙여넣기용)
+    # 본문 (수정 가능 + 복사용)
     st.subheader("📝 본문")
-    st.caption("전체 선택(Ctrl+A) → 복사(Ctrl+C) → 네이버 에디터에 붙여넣기")
-    st.text_area(
-        "본문 (복사용)",
+    st.caption("수정 후 아래 '최종본 확정' 버튼을 누르면 다음 글 생성 시 이 구조를 따라합니다")
+    edited_body = st.text_area(
+        "본문 (수정 가능)",
         value=sections["body"],
         height=500,
         key="ta_body",
     )
 
-    # 해시태그 (generate_hashtags 결과만 사용, 본문 내 해시태그와 중복 제거)
+    # 최종본 확정 버튼
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("✅ 최종본 확정 (다음 글에 이 구조 반영)", use_container_width=True, key="btn_save_gold"):
+            place = st.session_state.get("place_detail", {})
+            name = place.get("name", "알 수 없음") if isinstance(place, dict) else "알 수 없음"
+            save_gold_example(name, edited_body)
+            st.success(f"골드 예시로 저장 완료! 다음 글 생성 시 이 구조를 참고합니다.")
+
+    # 해시태그
     hashtags = st.session_state.get("hashtags")
     if hashtags:
         st.subheader("🏷 해시태그")
