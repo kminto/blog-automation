@@ -7,6 +7,7 @@ import streamlit as st
 
 from modules.validators import parse_comma_separated
 from modules.place_search import extract_region_from_address, extract_menus_from_category
+from modules.place_detail import fetch_place_detail
 from ui.helpers import build_my_review, build_auto_memo
 
 
@@ -63,17 +64,29 @@ def _build_detailed_review_from_form() -> dict:
 
 def _render_store_info(info: dict):
     """음식점 기본 정보를 컴팩트하게 표시한다."""
-    addr = info.get("road_address") or info.get("address", "")
+    # 상세 도로명 주소 우선 (층수/호수 포함)
+    addr = info.get("road_address", "") or info.get("address", "")
     hours = info.get("business_hours", "")
     tel = info.get("telephone", "")
+    category = info.get("category", "")
 
-    parts = [f"📍 {addr}"] if addr else []
+    line1 = []
+    if addr:
+        line1.append(f"📍 {addr}")
+    if category:
+        line1.append(f"📂 {category}")
+    if line1:
+        st.caption(" · ".join(line1))
+
+    line2 = []
     if hours:
-        parts.append(f"🕐 {hours}")
+        line2.append(f"🕐 {hours}")
     if tel:
-        parts.append(f"📞 {tel}")
-    if parts:
-        st.caption(" · ".join(parts))
+        line2.append(f"📞 {tel}")
+    if info.get("parking"):
+        line2.append(f"🅿️ {info['parking']}")
+    if line2:
+        st.caption(" · ".join(line2))
 
 
 def _render_input_tab(info: dict, auto_regions: list, auto_menus: list):
@@ -191,7 +204,20 @@ def render_place_detail(on_analyze, on_generate):
     info = st.session_state.place_detail
 
     # 음식점명 + 기본 정보 (컴팩트)
-    st.subheader(f"🏪 {info['name']}")
+    col_title, col_refresh = st.columns([4, 1])
+    with col_title:
+        st.subheader(f"🏪 {info['name']}")
+    with col_refresh:
+        if st.button("🔄 최신정보", key="btn_refresh_info"):
+            with st.spinner("조회 중..."):
+                updated = fetch_place_detail(name=info.get("name", ""))
+            if updated:
+                # 기존 정보에 새로 가져온 정보 덮어쓰기
+                info.update(updated)
+                st.session_state.place_detail = info
+                st.success("최신 정보 업데이트 완료!")
+                st.rerun()
+
     _render_store_info(info)
 
     # 🚀 생성 버튼 (상단 고정)
