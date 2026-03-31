@@ -18,10 +18,17 @@ def generate_keyword_combinations(
 
     combinations = set()
 
+    # 지역 + 맛집 (필수 - 모든 지역에 대해 맛집 키워드 보장)
+    for region in regions:
+        combinations.add(f"{region}맛집")
+        combinations.add(f"{region}맛집추천")
+        combinations.add(f"{region}점심")
+
     # 지역 + 메뉴
     for region, menu in product(regions, menus):
         combinations.add(f"{region} {menu}")
         combinations.add(f"{region} {menu} 맛집")
+        combinations.add(f"{region}{menu}")  # 붙여쓰기도 추가
 
     # 지역 + 상황
     for region, situation in product(regions, situations):
@@ -32,11 +39,18 @@ def generate_keyword_combinations(
         keyword = f"{region} {menu} {situation}"
         combinations.add(keyword)
 
-    # 중복 제거 후 정렬
-    result = sorted(combinations)
+    # 지역별 균등 배분: 각 지역의 핵심 키워드가 잘리지 않도록
+    # 지역+맛집 필수 키워드를 앞에 배치
+    priority = []
+    rest = []
+    for kw in sorted(combinations):
+        if any(kw.endswith("맛집") or kw.endswith("맛집추천") or kw.endswith("점심") for _ in [1]):
+            priority.append(kw)
+        else:
+            rest.append(kw)
 
-    # 상위 후보만 반환
-    return result[:MAX_KEYWORD_COMBINATIONS]
+    result = priority + rest
+    return result[:MAX_KEYWORD_COMBINATIONS * 2]  # 여유있게 100개
 
 
 def filter_meaningful_keywords(keywords: list[str]) -> list[str]:

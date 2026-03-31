@@ -67,10 +67,20 @@ def score_keyword(
     }
 
 
+# 맛집과 무관한 키워드 제외 패턴
+EXCLUDE_PATTERNS = [
+    "카페", "베이커리", "빵집", "디저트", "케이크",
+    "놀거리", "가볼만한곳", "여행", "숙소", "호텔", "펜션",
+    "병원", "학원", "학교", "부동산", "아파트",
+    "네일", "미용", "헬스", "필라테스",
+]
+
+
 def filter_relevant_keywords(
     scored_keywords: list[dict],
     regions: list[str],
     menus: list[str],
+    category: str = "맛집",
 ) -> list[dict]:
     """입력한 지역/메뉴와 관련된 키워드만 필터링하고 중복을 제거한다."""
     # 관련성 판단용 키워드 집합
@@ -79,6 +89,9 @@ def filter_relevant_keywords(
         relevant_terms.add(region)
     for menu in menus:
         relevant_terms.add(menu)
+
+    # 맛집이면 카페/놀거리 등 제외
+    exclude = EXCLUDE_PATTERNS if "맛집" in category or "음식" in category else []
 
     filtered = []
     seen = set()
@@ -90,6 +103,14 @@ def filter_relevant_keywords(
         if keyword in seen:
             continue
         seen.add(keyword)
+
+        # 무관한 카테고리 제외
+        if any(exc in keyword for exc in exclude):
+            continue
+
+        # 지역명만 있는 단독 키워드 제외 (예: "판교역", "성남")
+        if keyword in regions or keyword.rstrip("역") in regions:
+            continue
 
         # 지역 또는 메뉴 키워드가 포함된 것만 통과
         has_relevance = any(term in keyword for term in relevant_terms)
@@ -140,6 +161,7 @@ def rank_keywords(
     regions: list[str] | None = None,
     menus: list[str] | None = None,
     check_duplicates: bool = True,
+    category: str = "맛집",
 ) -> list[dict]:
     """관련성 필터링 후 경쟁도 다양성을 확보하며 상위 N개를 반환한다."""
     # 이전 사용 키워드 로드 (중복 방지)
@@ -151,6 +173,7 @@ def rank_keywords(
             scored_keywords,
             regions=regions or [],
             menus=menus or [],
+            category=category,
         )
 
     sorted_keywords = sorted(

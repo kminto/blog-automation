@@ -98,7 +98,14 @@ def _run_keyword_analysis(status, progress, region_list: list[str], menu_list: l
         keyword = kw_data.get("relKeyword", "")
         trend = trend_map.get(keyword, "유지")
         scored.append(score_keyword(kw_data, trend))
-    ranked = rank_keywords(scored, regions=region_list, menus=menu_list)
+    # place_detail의 카테고리로 무관한 키워드 필터링 (카페/놀거리 등 제외)
+    place_category = ""
+    if st.session_state.get("place_detail"):
+        place_category = st.session_state["place_detail"].get("category", "맛집")
+    ranked = rank_keywords(
+        scored, regions=region_list, menus=menu_list,
+        category=place_category or "맛집",
+    )
     st.session_state.scored_keywords = ranked
     status.write(f"상위 {len(ranked)}개 키워드 선별 완료")
     progress.progress(60)
