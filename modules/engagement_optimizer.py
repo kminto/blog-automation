@@ -56,8 +56,14 @@ def validate_engagement(blog_text: str) -> dict:
         suggestions.append(f"사진 자리 {photo_count}개 → {PHOTO_MAX}개 이하로")
 
     # 4. 문단 평균 길이 (15점) - 3줄 이하가 스크롤 유도
-    paragraphs = re.split(r"\n\s*\n", clean_text)
-    para_lengths = [len(p.split("\n")) for p in paragraphs if p.strip()]
+    # 원본 텍스트에서 빈 줄/사진 자리/소제목 기준으로 문단 분리
+    raw_text = "\n".join(lines)
+    paragraphs = re.split(r"\n\s*\n|출처 입력|사진 설명을 입력하세요\.", raw_text)
+    para_lengths = []
+    for p in paragraphs:
+        p_lines = [l for l in p.split("\n") if l.strip() and not l.startswith("#")]
+        if p_lines:
+            para_lengths.append(len(p_lines))
     avg_para = sum(para_lengths) / len(para_lengths) if para_lengths else 0
     if avg_para <= 3:
         score += 15

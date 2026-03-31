@@ -105,29 +105,35 @@ def render_place_detail(on_analyze, on_generate):
     # ==============================================
     # 간소화된 입력 (짧게 적으면 내 말투로 자동 확장)
     # ==============================================
-    st.subheader("✏️ 간단히 적으면 내 말투로 자동 확장돼요")
-    st.caption("키워드만 적어도 OK! 🪄 버튼 누르면 3~4줄로 늘려줘요")
+    # 서론 → 본론 → 결론 순서로 입력
+    # ==============================================
 
+    # --- 서론 (방문 정보) ---
+    st.subheader("📍 서론 - 방문 정보")
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        companion = st.text_input("👫 동행", placeholder="친구 2명, 부모님", key="input_companion")
+        visit_reason = st.text_input(
+            "🚶 방문 계기",
+            placeholder="친구 추천 / 검색해서 / 지나가다 발견",
+            key="input_visit_reason",
+        )
+    with col_s2:
+        mood = st.text_input("✨ 분위기/내부", placeholder="깔끔, 넓은 테이블, 회식 좋음", key="input_mood")
+
+    # --- 본론 (메뉴 후기) ---
+    st.subheader("🍽 본론 - 메뉴 후기")
     ordered_menus = st.text_area(
-        "🍽 주문한 메뉴 - 한줄평",
-        placeholder="양꼬치 - 맛있음, 숯불향 좋음\n생맥주 - 고기랑 찰떡\n볶음밥 - 마지막에 먹으면 꿀",
+        "주문한 메뉴 - 한줄평",
+        placeholder="팟타이 - 면 쫄깃, 새우 탱글\n똠양꿍 - 국물 시원, 매콤\n볶음밥 - 마지막에 먹으면 꿀",
         height=100,
         key="input_ordered",
     )
+    review_best = st.text_input("👍 제일 맛있었던 것", placeholder="팟타이 면 식감이 미쳤음", key="review_best")
 
-    col_r1, col_r2 = st.columns(2)
-    with col_r1:
-        companion = st.text_input("👫 동행", placeholder="친구 2명", key="input_companion")
-        review_best = st.text_input("👍 제일 맛있었던 것", placeholder="채끝 미쳤음", key="review_best")
-    with col_r2:
-        visit_reason = st.text_input(
-            "🚶 방문 계기",
-            placeholder="친구가 맛집이라고 추천 / 지나가다 발견 / 검색해서",
-            key="input_visit_reason",
-        )
-        review_worst = st.text_input("👎 아쉬웠던 점", placeholder="양 적음, 소스 아쉬움", key="review_worst")
-
-    mood = st.text_input("✨ 분위기/내부", placeholder="깔끔, 테이블 넓음, 회식 좋음", key="input_mood")
+    # --- 결론 (총평) ---
+    st.subheader("💬 결론 - 총평")
+    review_worst = st.text_input("👎 아쉬운 점 (없으면 비워두세요)", placeholder="주차 불편, 양 적음", key="review_worst")
 
     # 빠른 선택 (체크박스 - 해당하는 것만 체크)
     with st.expander("📋 빠른 선택 (해당하는 것만 체크)", expanded=False):
