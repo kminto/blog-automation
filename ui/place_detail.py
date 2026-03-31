@@ -122,11 +122,33 @@ def render_place_detail(on_analyze, on_generate):
 
     # --- 매장 소개 ---
     st.subheader("🏪 매장 소개")
+    mood = st.text_input("✨ 분위기/내부", placeholder="깔끔, 넓은 테이블, 인테리어 예쁨, 회식 좋음", key="input_mood")
+
+    st.caption("📍 지도 삽입 → 네이버 에디터에서 '지도' 버튼으로 직접 추가하세요")
+
     col_m1, col_m2 = st.columns(2)
     with col_m1:
-        mood = st.text_input("✨ 분위기/내부", placeholder="깔끔, 넓은 테이블, 회식 좋음", key="input_mood")
+        parking_info = st.text_input(
+            "🅿️ 주차",
+            placeholder="건물 지하 1시간 무료 / 근처 공영주차장 / 불가",
+            key="input_parking",
+        )
+        access_info = st.text_input(
+            "🚇 접근성",
+            placeholder="판교역 도보 5분 / 버스 정류장 앞 / 골목 안쪽",
+            key="input_access",
+        )
     with col_m2:
-        facilities = st.text_input("🚻 편의시설", placeholder="화장실 깨끗, 주차 가능, 유아의자", key="input_facilities")
+        restroom = st.text_input(
+            "🚻 화장실",
+            placeholder="매장 내 깨끗 / 건물 공용 / 비밀번호 있음",
+            key="input_restroom",
+        )
+        facilities = st.text_input(
+            "🪑 기타 편의시설",
+            placeholder="유아의자, 단체석, 콘센트, 와이파이",
+            key="input_facilities",
+        )
 
     # --- 본론 (메뉴 후기) ---
     st.subheader("🍽 본론 - 메뉴 후기")
@@ -305,10 +327,17 @@ def render_place_detail(on_analyze, on_generate):
             # 세분화 후기 조립
             detailed_review = _build_detailed_review_from_form()
 
-            # 편의시설 정보를 mood에 합치기
-            full_mood = mood
+            # 매장 정보를 mood에 합치기
+            mood_parts = [mood] if mood and mood.strip() else []
+            if parking_info and parking_info.strip():
+                mood_parts.append(f"주차: {parking_info}")
+            if access_info and access_info.strip():
+                mood_parts.append(f"접근성: {access_info}")
+            if restroom and restroom.strip():
+                mood_parts.append(f"화장실: {restroom}")
             if facilities and facilities.strip():
-                full_mood = f"{mood}, 편의시설: {facilities}" if mood else f"편의시설: {facilities}"
+                mood_parts.append(f"편의시설: {facilities}")
+            full_mood = ", ".join(mood_parts)
 
             on_generate(
                 info["name"], region_list, menu_list,
