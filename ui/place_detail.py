@@ -1,21 +1,14 @@
 """
 음식점 상세 정보 및 입력 폼 모듈
-짧은 메모만 적으면 → 내 말투로 자동 확장 → 블로그 글 생성.
+입력 → 버튼 1번 → 키워드분석 + 본문생성 + 품질검증 자동 완료.
 """
 
 import streamlit as st
 
 from modules.validators import parse_comma_separated
 from modules.place_search import extract_region_from_address, extract_menus_from_category
-from modules.photo_analyzer import (
-    analyze_photos,
-    extract_menus_from_analysis,
-    extract_descriptions_from_analysis,
-)
-from modules.memo_expander import expand_all_inputs
 from ui.helpers import build_my_review, build_auto_memo
 from ui.photo_section import render_photo_section
-from utils.api_utils import safe_api_call
 
 
 def _build_detailed_review_from_form() -> dict:
@@ -258,48 +251,6 @@ def render_place_detail(on_analyze, on_generate):
                 key="pr_recommend",
             )
 
-    # 🪄 일괄 확장 버튼 (선택사항)
-    st.caption("💡 일괄확장은 선택사항이에요. 바로 아래 '키워드 분석 + 본문 생성'을 눌러도 돼요!")
-    if st.button("🪄 내 말투로 일괄 확장 (선택)", use_container_width=True, key="btn_expand_all"):
-        raw_inputs = {
-            "ordered_menus": ordered_menus,
-            "best": review_best,
-            "worst": review_worst,
-            "episode": review_episode,
-            "mood": mood,
-            "memo": memo,
-        }
-        # 빈 항목 제외
-        filled = {k: v for k, v in raw_inputs.items() if v and v.strip()}
-        if not filled:
-            st.warning("최소 한 항목은 입력해주세요.")
-        else:
-            with st.spinner("🪄 내 말투로 확장 중... (5~10초)"):
-                expanded = safe_api_call(expand_all_inputs, filled)
-            if expanded["success"]:
-                st.session_state["expanded_inputs"] = expanded["data"]
-                st.success("확장 완료!")
-                st.rerun()
-            else:
-                st.error(f"확장 실패: {expanded['error']}")
-
-    # 확장 결과 표시
-    if st.session_state.get("expanded_inputs"):
-        exp = st.session_state["expanded_inputs"]
-        with st.expander("🪄 확장 결과 미리보기 (수정 가능)", expanded=True):
-            for key, value in exp.items():
-                if value:
-                    label_map = {
-                        "ordered_menus": "🍽 메뉴 리뷰",
-                        "best": "👍 맛있었던 것",
-                        "worst": "👎 아쉬운 점",
-                        "episode": "💬 에피소드",
-                        "mood": "✨ 분위기",
-                        "memo": "📝 메모",
-                    }
-                    label = label_map.get(key, key)
-                    st.text_area(label, value=value, height=80, key=f"exp_{key}")
-
     st.divider()
 
     # 사진 업로드 (선택)
@@ -333,18 +284,9 @@ def render_place_detail(on_analyze, on_generate):
         if not region_list or not menu_list:
             st.error("지역과 메뉴를 최소 하나씩 입력해주세요.")
         else:
-            # 확장 결과가 있으면 확장된 내용 사용
-            exp = st.session_state.get("expanded_inputs", {})
-            final_ordered = exp.get("ordered_menus", ordered_menus)
-            final_mood = exp.get("mood", mood)
-            final_memo = exp.get("memo", memo)
-
             my_review = build_my_review(
                 review_vibe, review_cook, review_wait, review_revisit,
-                exp.get("best", review_best),
-                exp.get("worst", review_worst),
-                exp.get("episode", review_episode),
-                "",
+                review_best, review_worst, "",  "",
             )
 
             # 세분화 후기 조립
@@ -352,8 +294,8 @@ def render_place_detail(on_analyze, on_generate):
 
             on_generate(
                 info["name"], region_list, menu_list,
-                companion, final_mood, final_memo,
-                final_ordered, my_review,
+                companion, mood, memo,
+                ordered_menus, my_review,
                 uploaded if uploaded else None,
                 detailed_review=detailed_review,
                 visit_reason=visit_reason,
