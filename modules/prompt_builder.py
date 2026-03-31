@@ -121,6 +121,13 @@ def _build_place_info(place_detail: dict = None) -> str:
     if place_detail.get("parking"):
         lines.append(f"주차: {place_detail['parking']}")
 
+    # 주차 상세 (블로그에서 수집한 문장 - 내 말투로 재작성 참고용)
+    parking_details = place_detail.get("parking_details", [])
+    if parking_details:
+        lines.append(f"주차 참고 (이 내용을 조합하여 내 말투로 새로 작성할 것, 복사 금지):")
+        for detail in parking_details:
+            lines.append(f"  - {detail}")
+
     # 정보가 주소밖에 없으면 빈 문자열 반환
     if len(lines) <= 1:
         return ""

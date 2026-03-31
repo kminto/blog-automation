@@ -94,7 +94,45 @@ def fetch_place_detail(
     if not merged.get("telephone") and blog_info.get("telephone"):
         merged["telephone"] = blog_info["telephone"]
 
+    # 주차 상세 정보 수집 (블로그 2~3개에서 주차 관련 문장 추출)
+    parking_details = _fetch_parking_details(name)
+    if parking_details:
+        merged["parking_details"] = parking_details
+
     return merged
+
+
+def _fetch_parking_details(name: str) -> list[str]:
+    """블로그 검색에서 주차 관련 문장을 2~3개 추출한다."""
+    try:
+        response = requests.get(
+            BLOG_SEARCH_URL,
+            headers=_get_search_headers(),
+            params={"query": f"{name} 주차", "display": 5, "sort": "sim"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        items = response.json().get("items", [])
+    except requests.RequestException:
+        return []
+
+    parking_sentences = []
+    seen = set()
+    for item in items:
+        desc = _strip_html(item.get("description", ""))
+        sentences = [s.strip() for s in re.split(r"[.!?\n]", desc) if "주차" in s]
+        for s in sentences:
+            # 10자 이상, 60자 이하의 유의미한 문장만
+            # 가게와 무관한 문장 필터 (양재천, 카페 등)
+            noise = ["양재천", "카페", "커피", "화장실", "다른곳"]
+            if 10 < len(s) < 60 and s not in seen and not any(n in s for n in noise):
+                # 주차 관련 키워드가 충분히 있는 문장만
+                parking_words = ["주차", "무료", "유료", "가능", "불가", "주차장", "발렛", "건물"]
+                if sum(1 for w in parking_words if w in s) >= 1:
+                    seen.add(s)
+                    parking_sentences.append(s)
+
+    return parking_sentences[:3]
 
 
 def _fetch_from_blog_search(name: str) -> dict:
