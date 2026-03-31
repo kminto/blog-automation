@@ -100,6 +100,22 @@ def _pick_core_keywords(
     return result
 
 
+def _build_optional_fields(
+    companion: str, visit_reason: str, mood: str, memo: str,
+) -> str:
+    """입력된 항목만 프롬프트에 포함한다. 빈 항목은 완전히 제거."""
+    lines = []
+    if companion and companion.strip():
+        lines.append(f"동행: {companion}")
+    if visit_reason and visit_reason.strip():
+        lines.append(f"방문 계기: {visit_reason}")
+    if mood and mood.strip():
+        lines.append(f"분위기: {mood}")
+    if memo and memo.strip():
+        lines.append(f"메모: {memo}")
+    return "\n".join(lines)
+
+
 def _build_place_info(place_detail: dict = None) -> str:
     """place_detail 딕셔너리를 프롬프트용 운영정보 텍스트로 변환한다."""
     if not place_detail:
@@ -311,14 +327,11 @@ def build_blog_prompt(
 
 ---
 
-[이번에 쓸 글 정보 - 반드시 이 정보만 사용할 것]
+[이번에 쓸 글 정보 - 반드시 이 정보만 사용할 것. 없는 항목은 절대 지어내지 말 것]
 음식점: {restaurant_name}
 지역: {region_text}
 대표 메뉴: {menu_text}
-동행: {companion or "미입력"}
-방문 계기: {visit_reason or "미입력"}
-분위기: {mood or "미입력"}
-메모: {memo or "없음"}
+{_build_optional_fields(companion, visit_reason, mood, memo)}
 {ordered_section}
 {_build_place_info(place_detail)}
 
