@@ -305,7 +305,6 @@ def _extract_info_from_text(text: str) -> dict:
 
 def merge_place_info(search_result: dict, detail: dict) -> dict:
     """검색 결과와 상세 정보를 하나로 합친다."""
-    # 전화번호: 상세에서 가져온 게 있으면 우선 사용
     telephone = (
         detail.get("telephone")
         or search_result.get("telephone")
@@ -317,11 +316,15 @@ def merge_place_info(search_result: dict, detail: dict) -> dict:
         "category": search_result.get("category", ""),
         "telephone": telephone,
         "address": search_result.get("address", ""),
-        "road_address": search_result.get("road_address", ""),
+        "road_address": detail.get("road_address") or search_result.get("road_address", ""),
         "business_hours": detail.get("business_hours", ""),
         "menus": detail.get("menus", []),
         "parking": detail.get("parking", ""),
         "reservation": detail.get("reservation", ""),
-        "facilities": detail.get("facilities", []),
         "link": search_result.get("link", ""),
+        # 시설 정보 (블로그에서 자동 수집)
+        "parking_details": detail.get("parking_details", []),
+        "restroom_info": detail.get("restroom_info", []),
+        "access_info": detail.get("access_info", []),
+        "facilities_info": detail.get("facilities_info", []),
     }
