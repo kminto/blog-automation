@@ -98,6 +98,10 @@ def fetch_place_detail(
     facility_info = _fetch_facility_info(name)
     merged.update(facility_info)
 
+    # parking_details가 있는데 parking이 없으면 요약 생성
+    if not merged.get("parking") and merged.get("parking_details"):
+        merged["parking"] = merged["parking_details"][0]
+
     return merged
 
 
