@@ -206,15 +206,9 @@ if st.session_state.scored_keywords:
     df = pd.DataFrame(display_data)
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-# 블로그 결과 (두 모드 공통)
+# 블로그 결과
 if st.session_state.blog_result:
     render_blog_result()
-
-# 해시태그 (두 모드 공통)
-if st.session_state.hashtags:
-    st.subheader("🏷 해시태그")
-    hashtag_text = " ".join(st.session_state.hashtags)
-    st.code(hashtag_text, language=None)
 
 # === DB 자동 저장 ===
 if is_db_available() and st.session_state.get("place_detail"):

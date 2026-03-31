@@ -1,11 +1,10 @@
 """
 블로그 생성 결과 표시 모듈
-제목/본문/해시태그를 섹션별로 렌더링한다. 복사+붙여넣기 워크플로우.
+제목/본문/해시태그를 섹션별로 렌더링한다.
 """
 
 import streamlit as st
 
-from modules.html_converter import blog_text_to_html
 from ui.helpers import parse_blog_sections
 
 
@@ -36,7 +35,7 @@ def render_blog_result():
 
     # 본문 (네이버 에디터 붙여넣기용)
     st.subheader("📝 본문")
-    st.caption("아래 텍스트를 전체 선택(Ctrl+A) → 복사(Ctrl+C) → 네이버 에디터에 붙여넣기")
+    st.caption("전체 선택(Ctrl+A) → 복사(Ctrl+C) → 네이버 에디터에 붙여넣기")
     st.text_area(
         "본문 (복사용)",
         value=sections["body"],
@@ -44,7 +43,13 @@ def render_blog_result():
         key="ta_body",
     )
 
-    # SEO/체류시간 검증 결과 (있으면)
+    # 해시태그 (generate_hashtags 결과만 사용, 본문 내 해시태그와 중복 제거)
+    hashtags = st.session_state.get("hashtags")
+    if hashtags:
+        st.subheader("🏷 해시태그")
+        st.code(" ".join(hashtags), language=None)
+
+    # 품질 리포트 (접이식)
     seo = st.session_state.get("seo_validation")
     eng = st.session_state.get("engagement")
     pub = st.session_state.get("publish_time")
@@ -62,18 +67,3 @@ def render_blog_result():
                     st.caption(f"  💡 {sug}")
             if pub:
                 st.markdown(f"**발행 추천** {pub['best_time']} ({pub['reason']})")
-
-    # 해시태그
-    if sections["hashtags"]:
-        st.subheader("🏷 해시태그")
-        st.code(sections["hashtags"], language=None)
-
-    # HTML 미리보기 (선택사항)
-    with st.expander("HTML 미리보기 (선택사항)", expanded=False):
-        body_html = blog_text_to_html(sections["body"])
-        st.markdown(
-            f'<div style="border:1px solid #ddd;padding:20px;border-radius:8px;'
-            f'max-height:500px;overflow-y:auto;background:white;">'
-            f'{body_html}</div>',
-            unsafe_allow_html=True,
-        )
