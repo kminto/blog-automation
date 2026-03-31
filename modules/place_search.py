@@ -78,26 +78,47 @@ def extract_region_from_address(
             seen.add(name)
             regions.append(name)
 
+    import re
+
+    # 필터: 지역명이 아닌 것 제거
+    noise = {"서울특별", "경기", "인천광역", "부산광역", "대구광역", "올림픽", "테헤란"}
+
     # 도로명주소 파싱
     if road_address:
         parts = road_address.split()
-        if len(parts) >= 2:
-            # 구 단위 (송파구 → 송파)
-            gu = parts[1].replace("시", "").replace("군", "").replace("구", "")
-            _add(gu)
+        for part in parts:
+            # 시 단위 (성남시 → 성남, 서울특별시 제외)
+            if part.endswith("시") and len(part) >= 3:
+                city = part[:-1]
+                if city not in noise:
+                    _add(city)
+            # 구 단위 (분당구 → 분당, 송파구 → 송파)
+            if part.endswith("구") and len(part) >= 2:
+                _add(part[:-1])
+            # 도로명에서 지역명 추출 (판교역로 → 판교, 왕십리로 → 왕십리)
+            road_match = re.match(r"([가-힣]{2,4})(역로|대로|로)", part)
+            if road_match:
+                name = road_match.group(1)
+                # "역"으로 끝나면 제거 (판교역 → 판교)
+                if name.endswith("역"):
+                    name = name[:-1]
+                if name not in noise and len(name) >= 2:
+                    _add(name)
 
-    # 지번주소에서 동 추출 (예: 서울특별시 송파구 방이동 149-9)
+    # 지번주소에서 동/구 추출
     if jibun_address:
         for part in jibun_address.split():
+            if part.endswith("구") and len(part) >= 2 and part[:-1] not in seen:
+                _add(part[:-1])
             if part.endswith("동") and len(part) >= 2:
-                _add(part)          # 방이동
-                _add(part[:-1])     # 방이
+                _add(part)          # 삼평동
+                _add(part[:-1])     # 삼평
                 break
             if part.endswith("읍") or part.endswith("면"):
                 _add(part)
                 break
 
-    # 지번주소가 없으면 도로명에서 동 이름 유추 시도
+    # 지번주소가 없으면 도로명에서 동 이름 유추
     if not jibun_address and road_address:
         for part in road_address.split():
             if part.endswith("동") and len(part) >= 3:
