@@ -3,6 +3,8 @@
 검색량, 경쟁도, 트렌드를 종합하여 키워드 점수를 산출한다.
 """
 
+from datetime import datetime, timedelta
+
 from modules.constants import (
     COMPETITION_WEIGHTS,
     TREND_WEIGHTS,
@@ -97,13 +99,52 @@ def filter_relevant_keywords(
     return filtered
 
 
+def _get_used_keywords(days: int = 30) -> set[str]:
+    """최근 N일 내 사용한 핵심 키워드를 로드한다."""
+    try:
+        from modules.blog_advisor import load_posting_log
+        log = load_posting_log()
+    except Exception:
+        return set()
+
+    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    used = set()
+    for record in log:
+        if record.get("date", "") >= cutoff:
+            for kw in record.get("keywords", []):
+                used.add(kw)
+    return used
+
+
+def _check_keyword_overlap(keyword: str, used_keywords: set[str]) -> bool:
+    """키워드가 이전에 사용된 키워드와 80% 이상 겹치는지 확인한다."""
+    kw_clean = keyword.replace(" ", "")
+    for used in used_keywords:
+        used_clean = used.replace(" ", "")
+        # 완전 일치
+        if kw_clean == used_clean:
+            return True
+        # 80% 이상 겹침 (짧은 쪽 기준)
+        shorter = min(len(kw_clean), len(used_clean))
+        if shorter == 0:
+            continue
+        common = sum(1 for c in kw_clean if c in used_clean)
+        if common / shorter >= 0.8:
+            return True
+    return False
+
+
 def rank_keywords(
     scored_keywords: list[dict],
     top_n: int = TOP_KEYWORDS_FOR_CONTENT,
     regions: list[str] | None = None,
     menus: list[str] | None = None,
+    check_duplicates: bool = True,
 ) -> list[dict]:
     """관련성 필터링 후 경쟁도 다양성을 확보하며 상위 N개를 반환한다."""
+    # 이전 사용 키워드 로드 (중복 방지)
+    used_keywords = _get_used_keywords() if check_duplicates else set()
+
     # 지역/메뉴 정보가 있으면 관련 키워드만 필터링
     if regions or menus:
         scored_keywords = filter_relevant_keywords(
@@ -137,13 +178,26 @@ def rank_keywords(
     for kw in low_mid[:max_low_mid]:
         if kw["keyword"] not in seen:
             seen.add(kw["keyword"])
+            # 중복 경고 표시
+            if used_keywords and _check_keyword_overlap(kw["keyword"], used_keywords):
+                kw["used_before"] = True
             result.append(kw)
 
     for kw in high:
         if kw["keyword"] not in seen:
             seen.add(kw["keyword"])
+            if used_keywords and _check_keyword_overlap(kw["keyword"], used_keywords):
+                kw["used_before"] = True
             result.append(kw)
         if len(result) >= top_n:
             break
+
+    # 중복 키워드가 과반이면 경고 (자기잠식 위험)
+    used_count = sum(1 for kw in result if kw.get("used_before"))
+    if used_count > len(result) // 2 and result:
+        result[0]["_dedup_warning"] = (
+            f"주의: {used_count}/{len(result)}개 키워드가 최근 30일 내 사용됨. "
+            "다른 지역/메뉴 조합을 시도하세요."
+        )
 
     return result

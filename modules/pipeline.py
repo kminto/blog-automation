@@ -14,6 +14,11 @@ from modules.hashtag_generator import generate_hashtags
 from modules.blog_advisor import add_posting_record
 from modules.keyword_cache import get_cached_keywords, save_to_cache, get_cache_stats
 from modules.post_processor import get_ai_score
+from modules.seo_validator import run_seo_validation
+from modules.engagement_optimizer import validate_engagement
+from modules.publish_scheduler import recommend_publish_time
+from modules.series_planner import suggest_series, find_related_posts, build_internal_link_prompt
+from modules.competitor_analyzer import get_competitive_guide, build_competitor_prompt
 from modules.photo_analyzer import analyze_photos, build_photo_context, extract_menus_from_analysis
 from utils.api_utils import safe_api_call
 
@@ -104,6 +109,8 @@ def _run_blog_generation(
     restaurant_name: str, region_list: list[str], menu_list: list[str],
     companion: str, mood: str, memo: str,
     ordered_menus: str, my_review: str, photo_context: str,
+    place_detail: dict = None,
+    detailed_review: dict = None,
 ):
     """본문 생성 단계."""
     # 메모 조합
@@ -112,6 +119,41 @@ def _run_blog_generation(
         full_memo += "\n\n[내가 주문한 메뉴]\n" + ordered_menus.strip()
     if my_review and my_review.strip():
         full_memo += "\n\n[내 솔직 후기]\n" + my_review.strip()
+
+    # 경쟁 분석 + 시리즈 정보 수집 (프롬프트 보강용)
+    status.update(label="🔎 경쟁 분석 중...")
+    extra_context = ""
+    try:
+        top_kw = (st.session_state.scored_keywords or [{}])[0].get("keyword", "")
+        if top_kw:
+            guide = get_competitive_guide(top_kw, my_char_count=1500)
+            comp_prompt = build_competitor_prompt(guide)
+            extra_context += f"\n{comp_prompt}"
+            status.write(f"🔎 상위 글 분석 완료: {guide.get('recommendation', '')}")
+
+        from modules.blog_advisor import load_posting_log
+        posting_log = load_posting_log()
+        related = find_related_posts(
+            region_list[0] if region_list else "",
+            "맛집", posting_log,
+            exclude_restaurant=restaurant_name,
+        )
+        if related:
+            link_prompt = build_internal_link_prompt(related)
+            extra_context += f"\n{link_prompt}"
+            status.write(f"🔗 관련 글 {len(related)}개 발견")
+
+        series = suggest_series(region_list[0] if region_list else "", posting_log)
+        if series.get("has_series"):
+            extra_context += f"\n[시리즈] {series['series_name']} (이전 글: {', '.join(series['restaurants'])})"
+            status.write(f"📚 {series['series_name']}")
+    except Exception:
+        pass
+    progress.progress(65)
+
+    # 경쟁 분석 결과를 memo에 추가
+    if extra_context:
+        full_memo += f"\n\n{extra_context}"
 
     # 본문 생성
     status.update(label="✍️ ChatGPT가 블로그 글을 작성 중...")
@@ -126,6 +168,8 @@ def _run_blog_generation(
         memo=full_memo,
         top_keywords=st.session_state.scored_keywords,
         photo_context=photo_context,
+        place_detail=place_detail,
+        detailed_review=detailed_review,
     )
     if not result["success"]:
         status.update(label="본문 생성 오류", state="error")
@@ -136,7 +180,33 @@ def _run_blog_generation(
     ai_check = get_ai_score(result["data"])
     grade_emoji = {"좋음": "🟢", "보통": "🟡", "개선필요": "🔴"}.get(ai_check["grade"], "⚪")
     status.write(f"본문 완료! {grade_emoji} AI 점수: {ai_check['score']}점 ({ai_check['grade']})")
-    progress.progress(85)
+    progress.progress(80)
+
+    # SEO 검증
+    status.update(label="🔍 SEO 검증 중...")
+    seo_result = run_seo_validation(result["data"], st.session_state.scored_keywords)
+    st.session_state["seo_validation"] = seo_result
+    seo_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(seo_result["grade"], "⚪")
+    status.write(f"SEO 검증 {seo_emoji} {seo_result['score']}점 ({seo_result['grade']})")
+    if seo_result["issues"]:
+        for issue in seo_result["issues"][:3]:
+            status.write(f"  ⚠️ {issue}")
+    # 체류시간 최적화 검증
+    engage_result = validate_engagement(result["data"])
+    st.session_state["engagement"] = engage_result
+    eng_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(engage_result["grade"], "⚪")
+    status.write(f"체류시간 {eng_emoji} {engage_result['score']}점 ({engage_result['grade']})")
+    if engage_result["suggestions"]:
+        for sug in engage_result["suggestions"][:2]:
+            status.write(f"  💡 {sug}")
+    progress.progress(88)
+
+    # 발행 타이밍 추천
+    pub_time = recommend_publish_time(st.session_state.scored_keywords, restaurant_name)
+    st.session_state["publish_time"] = pub_time
+    status.write(f"📅 추천 발행: {pub_time['best_time']} ({pub_time['reason']})")
+    status.write(f"  오늘({pub_time['today']}): {pub_time['today_score']}")
+    progress.progress(90)
 
     # 해시태그 생성
     status.update(label="🏷 해시태그 생성 중...")
@@ -172,6 +242,8 @@ def run_full_pipeline(
     ordered_menus: str = "",
     my_review: str = "",
     uploaded_photos: list = None,
+    place_detail: dict = None,
+    detailed_review: dict = None,
 ):
     """사진분석 → 키워드분석 → 본문생성 원클릭 파이프라인."""
     progress = st.progress(0)
@@ -188,11 +260,24 @@ def run_full_pipeline(
     _run_keyword_analysis(status, progress, region_list, menu_list)
 
     # 3. 본문 생성
+    # place_detail 자동 수집 (세션에 없으면)
+    if place_detail is None:
+        place_detail = st.session_state.get("place_detail")
+    if place_detail is None:
+        from modules.place_detail import fetch_place_detail
+        status.update(label="📍 운영정보 자동 수집 중...")
+        place_detail = fetch_place_detail(name=restaurant_name)
+        if place_detail:
+            st.session_state["place_detail"] = place_detail
+            status.write(f"📍 운영정보 수집 완료: {place_detail.get('business_hours', '미확인')}")
+
     success = _run_blog_generation(
         status, progress,
         restaurant_name, region_list, menu_list,
         companion, mood, memo,
         ordered_menus, my_review, photo_context,
+        place_detail=place_detail,
+        detailed_review=detailed_review,
     )
 
     if success:

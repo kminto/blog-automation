@@ -100,6 +100,119 @@ def _pick_core_keywords(
     return result
 
 
+def _build_place_info(place_detail: dict = None) -> str:
+    """place_detail 딕셔너리를 프롬프트용 운영정보 텍스트로 변환한다."""
+    if not place_detail:
+        return ""
+
+    lines = ["[운영정보 - 아래 내용을 [운영정보] 블록에 반드시 그대로 복사할 것. 절대 빈칸으로 두지 말 것]"]
+
+    if place_detail.get("road_address"):
+        lines.append(f"주소: {place_detail['road_address']}")
+    elif place_detail.get("address"):
+        lines.append(f"주소: {place_detail['address']}")
+
+    if place_detail.get("business_hours"):
+        lines.append(f"영업시간: {place_detail['business_hours']}")
+
+    if place_detail.get("telephone"):
+        lines.append(f"전화번호: {place_detail['telephone']}")
+
+    if place_detail.get("parking"):
+        lines.append(f"주차: {place_detail['parking']}")
+
+    # 정보가 주소밖에 없으면 빈 문자열 반환
+    if len(lines) <= 1:
+        return ""
+
+    return "\n".join(lines)
+
+
+def _build_detailed_review(detailed_review: dict = None) -> str:
+    """세분화된 후기 딕셔너리를 프롬프트용 텍스트로 변환한다."""
+    if not detailed_review:
+        return ""
+
+    sections = []
+
+    # 반찬 리뷰
+    side_dishes = detailed_review.get("side_dishes")
+    if side_dishes:
+        lines = ["[반찬 상세 리뷰 - 반드시 본문에 반영할 것]"]
+        if side_dishes.get("items"):
+            lines.append(f"반찬 종류: {side_dishes['items']}")
+        if side_dishes.get("taste"):
+            lines.append(f"맛 평가: {side_dishes['taste']}")
+        if side_dishes.get("refill"):
+            lines.append(f"리필 여부: {side_dishes['refill']}")
+        if side_dishes.get("highlight"):
+            lines.append(f"특히 맛있었던 반찬: {side_dishes['highlight']}")
+        sections.append("\n".join(lines))
+
+    # 메뉴별 상세 후기
+    menu_reviews = detailed_review.get("menu_reviews")
+    if menu_reviews:
+        for mr in menu_reviews:
+            lines = [f"[메뉴 상세: {mr.get('name', '?')} - 반드시 본문에 반영할 것]"]
+            if mr.get("price"):
+                lines.append(f"가격: {mr['price']}")
+            if mr.get("taste"):
+                lines.append(f"맛: {mr['taste']}")
+            if mr.get("texture"):
+                lines.append(f"식감: {mr['texture']}")
+            if mr.get("spice"):
+                lines.append(f"매운맛/간: {mr['spice']}")
+            if mr.get("pairing"):
+                lines.append(f"같이 먹으면 좋은 것: {mr['pairing']}")
+            if mr.get("highlight"):
+                lines.append(f"특이사항/포인트: {mr['highlight']}")
+            if mr.get("one_liner"):
+                lines.append(f"한줄평: {mr['one_liner']}")
+            sections.append("\n".join(lines))
+
+    # 서비스/친절도
+    service = detailed_review.get("service")
+    if service:
+        lines = ["[서비스 평가 - 반드시 본문에 반영할 것]"]
+        if service.get("staff"):
+            lines.append(f"직원/사장님: {service['staff']}")
+        if service.get("speed"):
+            lines.append(f"음식 나오는 속도: {service['speed']}")
+        if service.get("extras"):
+            lines.append(f"서비스/추가 제공: {service['extras']}")
+        sections.append("\n".join(lines))
+
+    # 가격 평가
+    price_eval = detailed_review.get("price_eval")
+    if price_eval:
+        sections.append(f"[가격 평가 - 본문 총평에 반영할 것]\n{price_eval}")
+
+    # 재방문 의사
+    revisit = detailed_review.get("revisit")
+    if revisit:
+        sections.append(f"[재방문 의사 - 본문 마무리에 반영할 것]\n{revisit}")
+
+    # 추천 대상
+    recommend_to = detailed_review.get("recommend_to")
+    if recommend_to:
+        sections.append(f"[추천 대상 - 본문 마무리에 반영할 것]\n{recommend_to}")
+
+    # 아쉬운 점
+    complaints = detailed_review.get("complaints")
+    if complaints:
+        sections.append(f"[아쉬운 점 - 솔직하게 본문에 1줄 반영할 것]\n{complaints}")
+
+    # 다음에 먹어볼 메뉴
+    next_menu = detailed_review.get("next_menu")
+    if next_menu:
+        sections.append(f"[다음에 먹어볼 메뉴 - 마무리에 반영할 것]\n{next_menu}")
+
+    if not sections:
+        return ""
+
+    return "\n\n".join(sections)
+
+
 def _build_keyword_table(keywords: list[dict]) -> str:
     """키워드 점수 데이터를 프롬프트용 테이블로 변환한다."""
     if not keywords:
@@ -123,6 +236,8 @@ def build_blog_prompt(
     memo: str,
     top_keywords: list[dict],
     photo_context: str = "",
+    place_detail: dict = None,
+    detailed_review: dict = None,
 ) -> str:
     """블로그 본문 생성을 위한 프롬프트를 구성한다."""
 
@@ -195,6 +310,7 @@ def build_blog_prompt(
 분위기: {mood or "미입력"}
 메모: {memo or "없음"}
 {ordered_section}
+{_build_place_info(place_detail)}
 
 [내 솔직 후기 - 이 내용이 글의 핵심]
 {my_review_text or "후기 미입력 - 일반적인 긍정 리뷰로 작성"}
@@ -206,6 +322,8 @@ def build_blog_prompt(
 - 부족한 부분만 분위기/비주얼 묘사로 살짝 보충
 
 {photo_context}
+
+{_build_detailed_review(detailed_review)}
 
 [이번 글의 톤 설정]
 {voice_guide}
@@ -236,7 +354,7 @@ def build_blog_prompt(
 2. 해시태그 3~5개 (핵심 키워드)
 3. "출처 입력" + "사진 설명을 입력하세요." (외관 사진 자리)
 4. 위치 설명 2~3줄 + 기대감 한줄
-5. "매장 정보" + [운영정보] 블록
+5. "매장 정보" + [운영정보] 블록 (위에 제공된 운영정보를 그대로 복사. 비워두지 말 것)
 6. "주차는?" 섹션 (2~3줄)
 7. "가게 내부 분위기" + "출처 입력" + 내부 묘사 3~4줄
 8. "셀프바 & 기본 반찬 리뷰" + "출처 입력" + 설명 2~3줄
@@ -244,7 +362,7 @@ def build_blog_prompt(
 10. 사이드 메뉴 (있으면) + "출처 입력" + 감상 2~3줄
 11. 한줄평/총평 3~4줄
 12. 추천 대상 + 마무리 2~3줄
-13. "🏷 해시태그" + 해시태그 7개
+13. "🏷 해시태그" + 해시태그 15~20개
 
 사진 자리 형식 (매우 중요):
 - 사진이 들어갈 자리는 반드시 이렇게 표시:
@@ -266,6 +384,13 @@ def build_blog_prompt(
 - ~합니다, ~됩니다 (격식체)
 - 같은 키워드 4회 이상 반복
 - ✏️ 표시나 수정 안내
+- 같은 어미 연속 2번 사용 금지 (~었어요 → ~더라고요 → ~거든요 식으로 매 문장 어미 변경)
+
+어미 다양성 (매우 중요):
+- ~었어요, ~더라고요만 반복하지 말 것
+- 위 보이스 가이드의 어미 목록에서 최대한 다양하게 돌려쓸 것
+- 감탄형(~대박이에요), 여운형(~생각나는 맛이에요), 솔직형(~나쁘지 않았어요), 질문형(~아닌가요?!) 등 섞어 쓸 것
+- 특히 메뉴 리뷰 섹션에서 묘사 표현을 다채롭게 (식감/향/비주얼/간 등 감각 교차)
 
 필수:
 - 1~2문장마다 줄바꿈

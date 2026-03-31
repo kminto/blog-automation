@@ -47,8 +47,8 @@ DATALAB_PERIOD_MONTHS = 3
 TITLE_COUNT = 5
 TITLE_MIN_LENGTH = 20    # 제목 최소 길이 (기존 25 → 20)
 TITLE_MAX_LENGTH = 25    # 제목 최대 길이 (기존 40 → 25, 모바일 잘림 방지)
-HASHTAG_MIN = 5          # 최소 해시태그 (기존 18 → 5)
-HASHTAG_MAX = 9          # 최대 해시태그 (기존 22 → 9, 10개 이상 무의미)
+HASHTAG_MIN = 15         # 최소 해시태그
+HASHTAG_MAX = 20         # 최대 해시태그
 PHOTO_MIN = 5            # 최소 사진 수 (기존 12 → 5)
 PHOTO_MAX = 10           # 최대 사진 수 (다양한 앵글, 과다 금지)
 

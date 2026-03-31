@@ -18,6 +18,61 @@ from ui.photo_section import render_photo_section
 from utils.api_utils import safe_api_call
 
 
+def _build_detailed_review_from_form() -> dict:
+    """Streamlit 세분화 후기 폼에서 detailed_review 딕셔너리를 조립한다."""
+    review = {}
+
+    # 반찬
+    sd = {}
+    if st.session_state.get("sd_items"):
+        sd["items"] = st.session_state["sd_items"]
+    if st.session_state.get("sd_taste"):
+        sd["taste"] = st.session_state["sd_taste"]
+    if st.session_state.get("sd_refill"):
+        sd["refill"] = st.session_state["sd_refill"]
+    if st.session_state.get("sd_highlight"):
+        sd["highlight"] = st.session_state["sd_highlight"]
+    if sd:
+        review["side_dishes"] = sd
+
+    # 서비스
+    sv = {}
+    if st.session_state.get("sv_staff"):
+        sv["staff"] = st.session_state["sv_staff"]
+    if st.session_state.get("sv_extras"):
+        sv["extras"] = st.session_state["sv_extras"]
+    if sv:
+        review["service"] = sv
+
+    # 가격/재방문
+    if st.session_state.get("pr_eval"):
+        review["price_eval"] = st.session_state["pr_eval"]
+    if st.session_state.get("pr_complaints"):
+        review["complaints"] = st.session_state["pr_complaints"]
+    if st.session_state.get("pr_revisit"):
+        review["revisit"] = st.session_state["pr_revisit"]
+    if st.session_state.get("pr_recommend"):
+        review["recommend_to"] = st.session_state["pr_recommend"]
+
+    # 메뉴별 상세 후기 (주문한 메뉴 입력에서 파싱)
+    ordered = st.session_state.get("input_ordered", "")
+    if ordered and ordered.strip():
+        menu_reviews = []
+        for line in ordered.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(" - ", 1)
+            mr = {"name": parts[0].strip()}
+            if len(parts) > 1:
+                mr["one_liner"] = parts[1].strip()
+            menu_reviews.append(mr)
+        if menu_reviews:
+            review["menu_reviews"] = menu_reviews
+
+    return review if review else None
+
+
 def render_place_detail(on_analyze, on_generate):
     """선택된 음식점 상세 정보를 표시하고 간소화된 입력 폼을 렌더링한다.
     on_analyze는 사용하지 않음 (호환성 유지). on_generate가 전체 파이프라인."""
@@ -114,6 +169,78 @@ def render_place_detail(on_analyze, on_generate):
         key="input_memo",
     )
 
+    # ==============================================
+    # 세분화 후기 입력 (서비스, 반찬, 가격 등 디테일)
+    # ==============================================
+    with st.expander("📋 세분화 후기 (더 정확한 글 생성)", expanded=False):
+        st.caption("여기 적은 내용은 본문에 빠짐없이 반영돼요!")
+
+        # 반찬
+        st.markdown("**🥢 반찬 리뷰**")
+        col_sd1, col_sd2 = st.columns(2)
+        with col_sd1:
+            sd_items = st.text_input(
+                "반찬 종류",
+                placeholder="갈치속젓, 알배추, 콩나물, 버섯볶음",
+                key="sd_items",
+            )
+            sd_highlight = st.text_input(
+                "특히 맛있었던 반찬",
+                placeholder="갈치속젓이 짭짤하면서 감칠맛 최고",
+                key="sd_highlight",
+            )
+        with col_sd2:
+            sd_taste = st.text_input(
+                "반찬 전체 평가",
+                placeholder="하나하나 다 맛있고 정성스러움",
+                key="sd_taste",
+            )
+            sd_refill = st.text_input(
+                "리필 여부",
+                placeholder="갈치속젓 리필 가능",
+                key="sd_refill",
+            )
+
+        st.markdown("**🍳 서비스 / 직원**")
+        col_sv1, col_sv2 = st.columns(2)
+        with col_sv1:
+            sv_staff = st.text_input(
+                "사장님/직원 평가",
+                placeholder="사장님과 직원 모두 매우 친절",
+                key="sv_staff",
+            )
+        with col_sv2:
+            sv_extras = st.text_input(
+                "서비스/특이사항",
+                placeholder="사장님이 직접 잘라줌, 리필 해줌",
+                key="sv_extras",
+            )
+
+        st.markdown("**💰 가격 / 재방문**")
+        col_pr1, col_pr2 = st.columns(2)
+        with col_pr1:
+            pr_eval = st.text_input(
+                "가격 평가",
+                placeholder="1인 45,000원. 비싸지만 산낙지 품질 생각하면 납득",
+                key="pr_eval",
+            )
+            pr_complaints = st.text_input(
+                "아쉬운 점",
+                placeholder="가격이 좀 있는 편",
+                key="pr_complaints",
+            )
+        with col_pr2:
+            pr_revisit = st.text_input(
+                "재방문 의사",
+                placeholder="재방문 100%, 다음엔 산낙지회 먹어볼 예정",
+                key="pr_revisit",
+            )
+            pr_recommend = st.text_input(
+                "추천 대상",
+                placeholder="부모님, 가족 외식, 소규모 회식",
+                key="pr_recommend",
+            )
+
     # 🪄 일괄 확장 버튼
     if st.button("🪄 내 말투로 일괄 확장", use_container_width=True, key="btn_expand_all"):
         raw_inputs = {
@@ -202,9 +329,13 @@ def render_place_detail(on_analyze, on_generate):
                 "",
             )
 
+            # 세분화 후기 조립
+            detailed_review = _build_detailed_review_from_form()
+
             on_generate(
                 info["name"], region_list, menu_list,
                 companion, final_mood, final_memo,
                 final_ordered, my_review,
                 uploaded if uploaded else None,
+                detailed_review=detailed_review,
             )

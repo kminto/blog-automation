@@ -80,9 +80,9 @@ def _fetch_post_text(blog_id: str, log_no: str) -> str:
         return ""
 
 
-def crawl_my_blog(blog_id: str = "rinx_x", max_posts: int = 8) -> list[dict]:
+def crawl_my_blog(blog_id: str = "rinx_x", max_posts: int = 30) -> list[dict]:
     """블로그 맛집 글을 크롤링하여 저장한다."""
-    posts = _fetch_post_list(blog_id)
+    posts = _fetch_post_list(blog_id, max_pages=10)
     collected = []
 
     for post in posts[:max_posts]:

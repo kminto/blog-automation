@@ -1,7 +1,7 @@
 """
 음식점 상세 정보 수집 모듈
-네이버 블로그 검색 API로 영업시간, 메뉴, 전화번호 등을 추출한다.
-네이버 플레이스 크롤링이 차단(429)되어 블로그 검색 기반으로 동작한다.
+네이버 지역검색 API(주소, 전화번호, 카테고리) +
+블로그 검색 API(영업시간, 주차, 라스트오더)를 조합하여 운영정보를 수집한다.
 """
 
 import os
@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+LOCAL_SEARCH_URL = "https://openapi.naver.com/v1/search/local.json"
 BLOG_SEARCH_URL = "https://openapi.naver.com/v1/search/blog.json"
 
 
@@ -23,16 +24,77 @@ def _get_search_headers() -> dict:
     }
 
 
+def _fetch_from_local_search(name: str) -> dict:
+    """네이버 지역검색 API로 주소, 전화번호, 카테고리를 가져온다."""
+    try:
+        response = requests.get(
+            LOCAL_SEARCH_URL,
+            headers=_get_search_headers(),
+            params={"query": name, "display": 1},
+            timeout=10,
+        )
+        response.raise_for_status()
+        items = response.json().get("items", [])
+    except requests.RequestException:
+        return {}
+
+    if not items:
+        return {}
+
+    item = items[0]
+    result = {}
+
+    road_addr = item.get("roadAddress", "")
+    if road_addr:
+        result["road_address"] = road_addr
+
+    addr = item.get("address", "")
+    if addr:
+        result["address"] = addr
+
+    tel = item.get("telephone", "")
+    if tel:
+        result["telephone"] = tel
+
+    category = item.get("category", "")
+    if category:
+        result["category"] = category
+
+    title = re.sub(r"<[^>]+>", "", item.get("title", ""))
+    if title:
+        result["name"] = title
+
+    return result
+
+
 def fetch_place_detail(
     place_url: str = "",
     name: str = "",
     address: str = "",
 ) -> dict:
-    """네이버 블로그 검색으로 가게 상세 정보를 수집한다."""
+    """지역검색(주소/전화) + 블로그검색(영업시간/주차)을 조합하여 운영정보를 수집한다."""
     if not name:
         return {}
 
-    return _fetch_from_blog_search(name)
+    # 1. 지역검색으로 주소/전화번호 (정형 데이터)
+    local_info = _fetch_from_local_search(name)
+
+    # 2. 블로그검색으로 영업시간/주차 (비정형 추출)
+    blog_info = _fetch_from_blog_search(name)
+
+    # 3. 합치기 (지역검색 우선, 블로그로 보충)
+    merged = {**blog_info, **local_info}
+
+    # 블로그에서만 나오는 항목 보충
+    if not merged.get("business_hours") and blog_info.get("business_hours"):
+        merged["business_hours"] = blog_info["business_hours"]
+    if not merged.get("parking") and blog_info.get("parking"):
+        merged["parking"] = blog_info["parking"]
+    # 지역검색에 전화번호 없으면 블로그에서 보충
+    if not merged.get("telephone") and blog_info.get("telephone"):
+        merged["telephone"] = blog_info["telephone"]
+
+    return merged
 
 
 def _fetch_from_blog_search(name: str) -> dict:
