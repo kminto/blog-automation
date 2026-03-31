@@ -107,7 +107,10 @@ def _run_photo_analysis(status, progress, uploaded_photos: list) -> str:
         return ""
 
 
-def _run_keyword_analysis(status, progress, region_list: list[str], menu_list: list[str]):
+def _run_keyword_analysis(
+    status, progress, region_list: list[str], menu_list: list[str],
+    user_context: str = "",
+):
     """키워드 분석 단계."""
     # 키워드 조합 생성
     status.update(label="🔍 키워드 조합 생성 중...")
@@ -165,6 +168,7 @@ def _run_keyword_analysis(status, progress, region_list: list[str], menu_list: l
     ranked = rank_keywords(
         scored, regions=region_list, menus=menu_list,
         category=place_category or "맛집",
+        user_context=user_context,
     )
     st.session_state.scored_keywords = ranked
     status.write(f"상위 {len(ranked)}개 키워드 선별 완료")
@@ -367,7 +371,12 @@ def run_full_pipeline(
     photo_context = _run_photo_analysis(status, progress, uploaded_photos or [])
 
     # 2. 키워드 분석
-    _run_keyword_analysis(status, progress, region_list, menu_list)
+    # 사용자 입력 전체를 컨텍스트로 조합 (키워드 필터링에 사용)
+    user_context = " ".join([
+        companion or "", mood or "", memo or "",
+        ordered_menus or "", my_review or "", visit_reason or "",
+    ])
+    _run_keyword_analysis(status, progress, region_list, menu_list, user_context)
 
     # 3. 본문 생성
     # place_detail 자동 수집 (세션에 없으면)

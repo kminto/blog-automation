@@ -67,20 +67,11 @@ def score_keyword(
     }
 
 
-# 항상 제외 (맛집과 완전 무관)
-ALWAYS_EXCLUDE = [
-    "놀거리", "가볼만한곳", "여행", "숙소", "호텔", "펜션",
+# 맛집/음식과 완전 무관한 키워드 (항상 제외)
+NEVER_FOOD = [
     "병원", "학원", "학교", "부동산", "아파트",
-    "네일", "미용", "헬스", "필라테스",
-    "클럽", "노래방", "대형", "백화점", "마트", "쇼핑",
+    "네일", "미용", "헬스", "필라테스", "클럽", "노래방",
 ]
-
-# 카테고리별 제외 패턴 (해당 카테고리가 아닐 때만 제외)
-CATEGORY_EXCLUDE = {
-    "카페": ["카페", "베이커리", "빵집", "디저트", "케이크", "커피"],
-    "술집": ["술집", "바", "펍", "이자카야"],
-    "브런치": ["브런치"],
-}
 
 
 def filter_relevant_keywords(
@@ -88,22 +79,31 @@ def filter_relevant_keywords(
     regions: list[str],
     menus: list[str],
     category: str = "맛집",
+    user_context: str = "",
 ) -> list[dict]:
-    """입력한 지역/메뉴와 관련된 키워드만 필터링하고 중복을 제거한다."""
-    # 관련성 판단용 키워드 집합
+    """사용자 입력 기반으로 관련 키워드만 필터링한다.
+
+    user_context: 사용자가 입력한 모든 텍스트 (메뉴, 분위기, 메모 등 합친 것)
+    """
+    # 관련성 판단용: 지역 + 메뉴 + 사용자 입력에서 추출한 단어
     relevant_terms = set()
     for region in regions:
         relevant_terms.add(region)
     for menu in menus:
         relevant_terms.add(menu)
 
-    # 항상 제외 + 카테고리에 따라 무관한 키워드 제외
-    exclude = list(ALWAYS_EXCLUDE)
-    category_lower = category.lower()
-    for cat_name, patterns in CATEGORY_EXCLUDE.items():
-        # 해당 카테고리가 아니면 제외 패턴 추가
-        if cat_name not in category_lower:
-            exclude.extend(patterns)
+    # 사용자 입력 + 카테고리에서 키워드 추출
+    context = f"{user_context} {category}".lower()
+    context_words = set()
+    # 음식/상황 관련 단어 감지
+    food_signals = [
+        "맛집", "점심", "저녁", "회식", "데이트", "혼밥", "가족",
+        "브런치", "카페", "술집", "이자카야", "바", "펍",
+        "해장", "야식", "기념일", "모임", "소개팅",
+    ]
+    for signal in food_signals:
+        if signal in context:
+            context_words.add(signal)
 
     filtered = []
     seen = set()
@@ -111,23 +111,44 @@ def filter_relevant_keywords(
     for kw_data in scored_keywords:
         keyword = kw_data["keyword"]
 
-        # 중복 제거
         if keyword in seen:
             continue
         seen.add(keyword)
 
-        # 무관한 카테고리 제외
-        if any(exc in keyword for exc in exclude):
+        # 음식과 완전 무관 → 항상 제외
+        if any(nf in keyword for nf in NEVER_FOOD):
             continue
 
-        # 지역명만 있는 단독 키워드 제외 (예: "판교역", "성남")
+        # 지역명만 단독으로 있는 키워드 제외 (예: "판교역")
         if keyword in regions or keyword.rstrip("역") in regions:
             continue
 
-        # 지역 또는 메뉴 키워드가 포함된 것만 통과
-        has_relevance = any(term in keyword for term in relevant_terms)
-        if has_relevance:
+        # 관련성 체크: 지역/메뉴 포함 필수
+        has_region_or_menu = any(term in keyword for term in relevant_terms)
+        if not has_region_or_menu:
+            continue
+
+        # "맛집", "점심", "저녁" 등 기본 맛집 키워드는 항상 통과
+        basic_food = ["맛집", "점심", "저녁", "맛집추천", "맛집후기"]
+        if any(bf in keyword for bf in basic_food):
             filtered.append(kw_data)
+            continue
+
+        # 사용자가 언급한 상황 키워드만 통과
+        # 예: 사용자가 "데이트"를 입력했으면 "판교데이트" 통과
+        # 사용자가 "카페" 안 적었으면 "판교카페" 제외
+        kw_lower = keyword.lower()
+        # 지역+메뉴 조합은 통과 (예: "판교팟타이", "분당쌀국수")
+        has_menu = any(menu in kw_lower for menu in menus)
+        if has_menu:
+            filtered.append(kw_data)
+            continue
+
+        # 상황 키워드 체크 (사용자가 입력한 것만)
+        has_user_signal = any(cw in kw_lower for cw in context_words)
+        if has_user_signal:
+            filtered.append(kw_data)
+            continue
 
     return filtered
 
@@ -174,6 +195,7 @@ def rank_keywords(
     menus: list[str] | None = None,
     check_duplicates: bool = True,
     category: str = "맛집",
+    user_context: str = "",
 ) -> list[dict]:
     """관련성 필터링 후 경쟁도 다양성을 확보하며 상위 N개를 반환한다."""
     # 이전 사용 키워드 로드 (중복 방지)
@@ -186,6 +208,7 @@ def rank_keywords(
             regions=regions or [],
             menus=menus or [],
             category=category,
+            user_context=user_context,
         )
 
     sorted_keywords = sorted(
