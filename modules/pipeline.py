@@ -301,6 +301,7 @@ def _run_blog_generation(
     st.session_state.blog_result = blog_text
     st.session_state["seo_validation"] = seo_result
     st.session_state["engagement"] = engage_result
+    st.session_state["ai_check"] = ai_check
     progress.progress(88)
 
     # 발행 타이밍 추천
