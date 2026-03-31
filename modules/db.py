@@ -75,6 +75,23 @@ def save_draft(draft_id: str, session_state: dict) -> str:
         value = session_state.get(session_key, "")
         data[db_field] = str(value) if value else ""
 
+    # 세분화 후기 묶어서 저장
+    detailed_fields = {
+        "sd_items": session_state.get("sd_items", ""),
+        "sd_taste": session_state.get("sd_taste", ""),
+        "sd_refill": session_state.get("sd_refill", ""),
+        "sd_highlight": session_state.get("sd_highlight", ""),
+        "sv_staff": session_state.get("sv_staff", ""),
+        "sv_extras": session_state.get("sv_extras", ""),
+        "pr_eval": session_state.get("pr_eval", ""),
+        "pr_complaints": session_state.get("pr_complaints", ""),
+        "pr_revisit": session_state.get("pr_revisit", ""),
+        "pr_recommend": session_state.get("pr_recommend", ""),
+    }
+    # 빈 값 제거 후 저장
+    detailed_filled = {k: v for k, v in detailed_fields.items() if v}
+    data["detailed_review_inputs"] = detailed_filled if detailed_filled else None
+
     # JSON 필드
     for field in ["expanded_inputs", "scored_keywords", "hashtags", "photo_analysis"]:
         value = session_state.get(field)
@@ -90,7 +107,14 @@ def save_draft(draft_id: str, session_state: dict) -> str:
         if result.data:
             return result.data[0].get("id", draft_id)
     except Exception:
-        pass
+        # detailed_review_inputs 컬럼이 없으면 제거 후 재시도
+        try:
+            data.pop("detailed_review_inputs", None)
+            result = client.table("drafts").upsert(data).execute()
+            if result.data:
+                return result.data[0].get("id", draft_id)
+        except Exception:
+            pass
 
     return draft_id
 
@@ -167,6 +191,12 @@ def restore_draft_to_session(draft: dict):
             st.session_state[field] = draft[field]
         else:
             st.session_state[field] = None
+
+    # 세분화 후기 복원
+    detailed = draft.get("detailed_review_inputs")
+    if detailed and isinstance(detailed, dict):
+        for key, value in detailed.items():
+            st.session_state[key] = value
 
 
 # === 포스팅 기록 ===

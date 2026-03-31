@@ -132,35 +132,48 @@ def render_place_detail(on_analyze, on_generate):
 
     mood = st.text_input("✨ 분위기/내부", placeholder="깔끔, 테이블 넓음, 회식 좋음", key="input_mood")
 
-    # 빠른 선택 (접을 수 있게)
-    with st.expander("📋 빠른 선택 (선택사항)", expanded=False):
-        col_s1, col_s2 = st.columns(2)
-        with col_s1:
-            review_vibe = st.selectbox(
-                "핵심 포인트",
-                ["가성비 좋음", "고급짐/특별한 날", "양 많음", "맛은 좋은데 비쌈",
-                 "동네 단골각", "데이트 맛집", "가족모임 적합", "혼밥 가능"],
-                key="review_vibe",
-            )
-            review_cook = st.selectbox(
-                "조리 방식",
-                ["직원이 구워줌", "내가 직접 구움", "이미 조리돼서 나옴",
-                 "셰프가 눈앞에서 조리", "셀프바/뷔페", "해당없음"],
-                key="review_cook",
-            )
-        with col_s2:
-            review_wait = st.selectbox(
-                "웨이팅",
-                ["웨이팅 없음", "5~10분 대기", "10~30분 대기",
-                 "30분 이상 대기", "예약해서 바로 입장"],
-                key="review_wait",
-            )
-            review_revisit = st.selectbox(
-                "재방문 의사",
-                ["무조건 재방문", "가끔 올만함", "한번은 갈만함",
-                 "글쎄.. 다음엔 다른데", "비추"],
-                key="review_revisit",
-            )
+    # 빠른 선택 (체크박스 - 해당하는 것만 체크)
+    with st.expander("📋 빠른 선택 (해당하는 것만 체크)", expanded=False):
+        st.caption("체크 안 하면 본문에 포함되지 않아요")
+
+        st.markdown("**핵심 포인트**")
+        col_v1, col_v2 = st.columns(2)
+        vibe_options = ["가성비 좋음", "고급짐/특별한 날", "양 많음", "맛은 좋은데 비쌈",
+                        "동네 단골각", "데이트 맛집", "가족모임 적합", "혼밥 가능"]
+        vibe_selected = []
+        for i, opt in enumerate(vibe_options):
+            col = col_v1 if i % 2 == 0 else col_v2
+            with col:
+                if st.checkbox(opt, key=f"vibe_{i}"):
+                    vibe_selected.append(opt)
+
+        st.markdown("**조리 방식**")
+        cook_options = ["직원이 구워줌", "내가 직접 구움", "이미 조리돼서 나옴",
+                        "셰프가 눈앞에서 조리"]
+        review_cook = ""
+        for opt in cook_options:
+            if st.checkbox(opt, key=f"cook_{opt}"):
+                review_cook = opt
+
+        col_w1, col_w2 = st.columns(2)
+        with col_w1:
+            st.markdown("**웨이팅**")
+            wait_options = ["웨이팅 없음", "5~10분 대기", "10~30분 대기",
+                            "30분 이상 대기", "예약해서 바로 입장"]
+            review_wait = ""
+            for opt in wait_options:
+                if st.checkbox(opt, key=f"wait_{opt}"):
+                    review_wait = opt
+        with col_w2:
+            st.markdown("**재방문 의사**")
+            revisit_options = ["무조건 재방문", "가끔 올만함", "한번은 갈만함", "비추"]
+            review_revisit = ""
+            for opt in revisit_options:
+                if st.checkbox(opt, key=f"revisit_{opt}"):
+                    review_revisit = opt
+
+    # 빠른선택 결과 조합
+    review_vibe = ", ".join(vibe_selected) if vibe_selected else ""
 
     memo = st.text_area(
         "📝 추가 메모",
@@ -241,8 +254,9 @@ def render_place_detail(on_analyze, on_generate):
                 key="pr_recommend",
             )
 
-    # 🪄 일괄 확장 버튼
-    if st.button("🪄 내 말투로 일괄 확장", use_container_width=True, key="btn_expand_all"):
+    # 🪄 일괄 확장 버튼 (선택사항)
+    st.caption("💡 일괄확장은 선택사항이에요. 바로 아래 '키워드 분석 + 본문 생성'을 눌러도 돼요!")
+    if st.button("🪄 내 말투로 일괄 확장 (선택)", use_container_width=True, key="btn_expand_all"):
         raw_inputs = {
             "ordered_menus": ordered_menus,
             "best": review_best,

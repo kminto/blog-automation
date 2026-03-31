@@ -77,12 +77,16 @@ def build_my_review(
     vibe: str, cook: str, wait: str, revisit: str,
     best: str, worst: str, episode: str, free: str,
 ) -> str:
-    """분류형 입력을 하나의 후기 텍스트로 조합한다."""
-    parts = [f"이 가게 핵심 포인트: {vibe}"]
-    if cook != "해당없음":
+    """분류형 입력을 하나의 후기 텍스트로 조합한다. 빈 항목은 건너뛴다."""
+    parts = []
+    if vibe:
+        parts.append(f"이 가게 핵심 포인트: {vibe}")
+    if cook:
         parts.append(f"조리 방식: {cook}")
-    parts.append(f"웨이팅: {wait}")
-    parts.append(f"재방문 의사: {revisit}")
+    if wait:
+        parts.append(f"웨이팅: {wait}")
+    if revisit:
+        parts.append(f"재방문 의사: {revisit}")
     if best:
         parts.append(f"제일 맛있었던 것: {best}")
     if worst:
