@@ -67,15 +67,20 @@ def score_keyword(
     }
 
 
-# 맛집과 무관한 키워드 제외 패턴
-EXCLUDE_PATTERNS = [
-    "카페", "베이커리", "빵집", "디저트", "케이크", "커피",
-    "브런치", "놀거리", "가볼만한곳", "여행", "숙소", "호텔", "펜션",
+# 항상 제외 (맛집과 완전 무관)
+ALWAYS_EXCLUDE = [
+    "놀거리", "가볼만한곳", "여행", "숙소", "호텔", "펜션",
     "병원", "학원", "학교", "부동산", "아파트",
     "네일", "미용", "헬스", "필라테스",
-    "술집", "바", "클럽", "노래방",
-    "대형", "백화점", "마트", "쇼핑",
+    "클럽", "노래방", "대형", "백화점", "마트", "쇼핑",
 ]
+
+# 카테고리별 제외 패턴 (해당 카테고리가 아닐 때만 제외)
+CATEGORY_EXCLUDE = {
+    "카페": ["카페", "베이커리", "빵집", "디저트", "케이크", "커피"],
+    "술집": ["술집", "바", "펍", "이자카야"],
+    "브런치": ["브런치"],
+}
 
 
 def filter_relevant_keywords(
@@ -92,8 +97,13 @@ def filter_relevant_keywords(
     for menu in menus:
         relevant_terms.add(menu)
 
-    # 맛집이면 카페/놀거리 등 제외
-    exclude = EXCLUDE_PATTERNS if "맛집" in category or "음식" in category else []
+    # 항상 제외 + 카테고리에 따라 무관한 키워드 제외
+    exclude = list(ALWAYS_EXCLUDE)
+    category_lower = category.lower()
+    for cat_name, patterns in CATEGORY_EXCLUDE.items():
+        # 해당 카테고리가 아니면 제외 패턴 추가
+        if cat_name not in category_lower:
+            exclude.extend(patterns)
 
     filtered = []
     seen = set()

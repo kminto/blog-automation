@@ -29,10 +29,10 @@ LONGTAIL_BONUS = 1.3     # 3단어 이상 롱테일 키워드 가산
 MAX_KEYWORD_COMBINATIONS = 50
 TOP_KEYWORDS_FOR_CONTENT = 10
 
-# === 상황 키워드 (맛집 전용 - 카페/브런치 제외) ===
+# === 상황 키워드 ===
 SITUATION_KEYWORDS = [
     "맛집", "맛집추천", "점심", "저녁", "회식",
-    "가족모임", "데이트", "혼밥", "맛집후기",
+    "가족모임", "데이트", "혼밥", "브런치", "카페", "술집",
 ]
 
 # === OpenAI API 설정 ===
