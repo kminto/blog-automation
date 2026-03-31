@@ -200,8 +200,18 @@ with tab_quick:
 # 키워드 결과 (두 모드 공통)
 if st.session_state.scored_keywords:
     st.subheader("📊 추천 키워드 (점수 상위)")
-    df = pd.DataFrame(st.session_state.scored_keywords)
-    df.columns = ["키워드", "검색량", "경쟁도", "트렌드", "점수"]
+    # 표시할 컬럼만 추출 (중복 방지 등 추가 필드 제외)
+    display_data = [
+        {
+            "키워드": kw.get("keyword", ""),
+            "검색량": kw.get("search_volume", 0),
+            "경쟁도": kw.get("competition", ""),
+            "트렌드": kw.get("trend", ""),
+            "점수": kw.get("score", 0),
+        }
+        for kw in st.session_state.scored_keywords
+    ]
+    df = pd.DataFrame(display_data)
     st.dataframe(df, use_container_width=True, hide_index=True)
 
 # 블로그 결과 (두 모드 공통)
