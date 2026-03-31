@@ -105,21 +105,28 @@ def render_place_detail(on_analyze, on_generate):
     # ==============================================
     # 간소화된 입력 (짧게 적으면 내 말투로 자동 확장)
     # ==============================================
-    # 서론 → 본론 → 결론 순서로 입력
+    # 서론 → 매장 → 본론 → 결론
     # ==============================================
 
-    # --- 서론 (방문 정보) ---
-    st.subheader("📍 서론 - 방문 정보")
+    # --- 서론 ---
+    st.subheader("📍 서론")
     col_s1, col_s2 = st.columns(2)
     with col_s1:
-        companion = st.text_input("👫 동행", placeholder="친구 2명, 부모님", key="input_companion")
         visit_reason = st.text_input(
             "🚶 방문 계기",
             placeholder="친구 추천 / 검색해서 / 지나가다 발견",
             key="input_visit_reason",
         )
     with col_s2:
+        companion = st.text_input("👫 동행", placeholder="친구 2명, 부모님", key="input_companion")
+
+    # --- 매장 소개 ---
+    st.subheader("🏪 매장 소개")
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
         mood = st.text_input("✨ 분위기/내부", placeholder="깔끔, 넓은 테이블, 회식 좋음", key="input_mood")
+    with col_m2:
+        facilities = st.text_input("🚻 편의시설", placeholder="화장실 깨끗, 주차 가능, 유아의자", key="input_facilities")
 
     # --- 본론 (메뉴 후기) ---
     st.subheader("🍽 본론 - 메뉴 후기")
@@ -131,8 +138,8 @@ def render_place_detail(on_analyze, on_generate):
     )
     review_best = st.text_input("👍 제일 맛있었던 것", placeholder="팟타이 면 식감이 미쳤음", key="review_best")
 
-    # --- 결론 (총평) ---
-    st.subheader("💬 결론 - 총평")
+    # --- 결론 ---
+    st.subheader("💬 결론")
     review_worst = st.text_input("👎 아쉬운 점 (없으면 비워두세요)", placeholder="주차 불편, 양 적음", key="review_worst")
 
     # 빠른 선택 (체크박스 - 해당하는 것만 체크)
@@ -298,9 +305,14 @@ def render_place_detail(on_analyze, on_generate):
             # 세분화 후기 조립
             detailed_review = _build_detailed_review_from_form()
 
+            # 편의시설 정보를 mood에 합치기
+            full_mood = mood
+            if facilities and facilities.strip():
+                full_mood = f"{mood}, 편의시설: {facilities}" if mood else f"편의시설: {facilities}"
+
             on_generate(
                 info["name"], region_list, menu_list,
-                companion, mood, memo,
+                companion, full_mood, memo,
                 ordered_menus, my_review,
                 uploaded if uploaded else None,
                 detailed_review=detailed_review,
