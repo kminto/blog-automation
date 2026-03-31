@@ -60,6 +60,13 @@ def render_place_detail(on_analyze, on_generate):
     """심플한 1페이지 UI: 음식점 정보 → 입력 → 버튼 → 결과."""
     info = st.session_state.place_detail
 
+    # 시설 정보가 없으면 자동 보충 (기존 글 호환)
+    if not info.get("parking_details") and not info.get("restroom_info") and info.get("name"):
+        updated = fetch_place_detail(name=info["name"])
+        if updated:
+            info.update(updated)
+            st.session_state.place_detail = info
+
     # === 헤더: 음식점명 + 최신정보 + 생성 버튼 ===
     col_name, col_refresh = st.columns([5, 1])
     with col_name:

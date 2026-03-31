@@ -104,15 +104,18 @@ with st.sidebar:
                             restore_draft_to_session(full_draft)
                             st.session_state["current_draft_id"] = d["id"]
                             st.session_state["draft_restaurant_name"] = name
-                            # place_detail은 검색 결과에서 오므로 간이 복원
-                            if not st.session_state.get("place_detail") and name != "제목 없음":
-                                st.session_state["place_detail"] = {
-                                    "name": name,
-                                    "road_address": full_draft.get("memo", ""),
-                                    "address": "",
-                                    "category": full_draft.get("menus", ""),
-                                    "telephone": "",
-                                }
+                            # place_detail 복원: 이름으로 최신 정보 자동 수집
+                            if name != "제목 없음":
+                                from modules.place_detail import fetch_place_detail as _fetch
+                                fresh = _fetch(name=name)
+                                if fresh:
+                                    fresh["name"] = name
+                                    st.session_state["place_detail"] = fresh
+                                elif not st.session_state.get("place_detail"):
+                                    st.session_state["place_detail"] = {
+                                        "name": name, "road_address": "",
+                                        "address": "", "category": "", "telephone": "",
+                                    }
                         st.rerun()
                 with col_del:
                     if st.button("🗑", key=f"del_{d['id']}"):
