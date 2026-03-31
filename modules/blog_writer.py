@@ -68,6 +68,15 @@ def generate_blog_post(
             ],
         )
         raw_text = response.choices[0].message.content
+
+        # ChatGPT 거부 응답 감지
+        refuse_patterns = ["죄송", "처리할 수 없", "도와드릴 수 없", "요청을 이해"]
+        if any(p in raw_text[:50] for p in refuse_patterns):
+            raise RuntimeError(
+                f"ChatGPT가 요청을 거부했습니다. 응답: {raw_text[:100]}... "
+                f"프롬프트 길이: {len(prompt)}자"
+            )
+
         # AI 냄새 후처리 (격식체→구어체, 반복 표현 교체, 마크다운 잔재 정리)
         return process_blog_text(raw_text)
     except APIConnectionError:
@@ -75,4 +84,4 @@ def generate_blog_post(
     except RateLimitError:
         raise RuntimeError("OpenAI API 호출 한도를 초과했습니다. 잠시 후 다시 시도해주세요.")
     except APIStatusError as e:
-        raise RuntimeError(f"OpenAI API 오류가 발생했습니다: {e.status_code}")
+        raise RuntimeError(f"OpenAI API 오류: {e.status_code} - {e.message}")

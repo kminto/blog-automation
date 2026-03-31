@@ -174,6 +174,8 @@ def _run_blog_generation(
     if not result["success"]:
         status.update(label="본문 생성 오류", state="error")
         st.error(f"본문 생성 오류: {result['error']}")
+        # 디버깅용: 프롬프트 길이 표시
+        st.caption(f"프롬프트 길이: {len(full_memo)}자 / 키워드: {len(st.session_state.scored_keywords or [])}개")
         return False
 
     st.session_state.blog_result = result["data"]
