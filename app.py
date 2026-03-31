@@ -163,19 +163,12 @@ if _today_topic and not _today_topic.get("done"):
         unsafe_allow_html=True,
     )
 
-# 현재 작성 중인 글 표시
-current_name = st.session_state.get("draft_restaurant_name", "")
-if current_name:
-    st.markdown(f"#### ✏️ {current_name}")
-elif st.session_state.get("place_detail"):
-    st.markdown(f"#### ✏️ {st.session_state['place_detail'].get('name', '')}")
-else:
-    st.markdown("#### 🍽️ 맛집 블로그 자동화")
-    st.caption("사이드바에서 음식점을 검색하거나, 목록에서 글을 선택하세요.")
-
 # 검색 결과
 if st.session_state.search_results and not st.session_state.selected_place:
     render_search_results()
+elif not st.session_state.get("place_detail"):
+    st.markdown("#### 🍽️ 맛집 블로그 자동화")
+    st.caption("사이드바에서 음식점을 검색하거나, 목록에서 글을 선택하세요.")
 
 # 선택된 음식점
 if st.session_state.place_detail:
@@ -189,26 +182,25 @@ if st.session_state.place_detail:
         on_generate=run_full_pipeline,
     )
 
-# 키워드 결과 (두 모드 공통)
-if st.session_state.scored_keywords:
-    st.subheader("📊 추천 키워드 (점수 상위)")
-    # 표시할 컬럼만 추출 (중복 방지 등 추가 필드 제외)
-    display_data = [
-        {
-            "키워드": kw.get("keyword", ""),
-            "검색량": kw.get("search_volume", 0),
-            "경쟁도": kw.get("competition", ""),
-            "트렌드": kw.get("trend", ""),
-            "점수": kw.get("score", 0),
-        }
-        for kw in st.session_state.scored_keywords
-    ]
-    df = pd.DataFrame(display_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    # 키워드 결과
+    if st.session_state.scored_keywords:
+        with st.expander(f"📊 키워드 분석 ({len(st.session_state.scored_keywords)}개)", expanded=False):
+            display_data = [
+                {
+                    "키워드": kw.get("keyword", ""),
+                    "검색량": kw.get("search_volume", 0),
+                    "경쟁도": kw.get("competition", ""),
+                    "트렌드": kw.get("trend", ""),
+                    "점수": kw.get("score", 0),
+                }
+                for kw in st.session_state.scored_keywords
+            ]
+            df = pd.DataFrame(display_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
-# 블로그 결과
-if st.session_state.blog_result:
-    render_blog_result()
+    # 블로그 결과
+    if st.session_state.blog_result:
+        render_blog_result()
 
 # === DB 자동 저장 ===
 if is_db_available() and st.session_state.get("place_detail"):
