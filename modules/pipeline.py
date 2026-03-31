@@ -297,7 +297,43 @@ def _run_blog_generation(
 
     progress.progress(85)
 
-    # 최종 결과 저장
+    # 최종 품질 판정
+    final_pass = (
+        seo_result["grade"] in ("A", "B")
+        and ai_check["grade"] in ("좋음", "보통")
+        and engage_result["grade"] in ("A", "B")
+    )
+
+    if not final_pass:
+        # 부족한 부분 구체적 안내
+        st.session_state["seo_validation"] = seo_result
+        st.session_state["engagement"] = engage_result
+        st.session_state["ai_check"] = ai_check
+
+        missing = []
+        char_count = seo_result.get("structure", {}).get("char_count", 0)
+        if char_count < 1500:
+            missing.append(f"본문 {char_count}자 → 1500자 이상 필요 (메뉴 후기를 더 상세히 적어주세요)")
+        if seo_result["grade"] == "C":
+            for iss in seo_result.get("issues", []):
+                missing.append(iss)
+        if engage_result["grade"] == "C":
+            for sug in engage_result.get("suggestions", []):
+                missing.append(sug)
+        if ai_check["grade"] == "개선필요":
+            missing.append("AI 냄새가 높습니다 — 자동 재생성으로도 개선 안 됨")
+
+        status.update(label="⚠️ 품질 기준 미달", state="error")
+        st.warning("**입력 정보가 부족하여 품질 점수가 낮습니다.**\n아래 항목을 보완 후 다시 생성해주세요:")
+        for m in missing:
+            st.caption(f"  • {m}")
+        st.info("💡 **팁**: '주문 메뉴 한줄평'을 더 상세히 적으면 글자수와 품질이 올라갑니다.")
+
+        # 미달이어도 참고용으로 본문은 보여줌 (수정 가능하도록)
+        st.session_state.blog_result = blog_text
+        return False
+
+    # B등급 이상 통과 → 최종 결과 저장
     st.session_state.blog_result = blog_text
     st.session_state["seo_validation"] = seo_result
     st.session_state["engagement"] = engage_result
