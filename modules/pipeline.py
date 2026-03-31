@@ -156,11 +156,8 @@ def _run_blog_generation(
     if extra_context:
         full_memo += f"\n\n{extra_context}"
 
-    # 본문 생성
-    status.update(label="✍️ ChatGPT가 블로그 글을 작성 중...")
-    status.write("gpt-4o 모델로 본문 생성 중... (10~20초)")
-    result = safe_api_call(
-        generate_blog_post,
+    # 본문 생성 + 품질 검증 + 자동 재생성 (최대 1회)
+    generate_args = dict(
         restaurant_name=restaurant_name,
         regions=region_list,
         menus=menu_list,
@@ -173,43 +170,70 @@ def _run_blog_generation(
         detailed_review=detailed_review,
         visit_reason=visit_reason,
     )
-    if not result["success"]:
-        status.update(label="본문 생성 오류", state="error")
-        st.error(f"본문 생성 오류: {result['error']}")
-        # 디버깅용: 프롬프트 길이 표시
-        st.caption(f"프롬프트 길이: {len(full_memo)}자 / 키워드: {len(st.session_state.scored_keywords or [])}개")
-        return False
 
-    st.session_state.blog_result = result["data"]
-    ai_check = get_ai_score(result["data"])
-    grade_emoji = {"좋음": "🟢", "보통": "🟡", "개선필요": "🔴"}.get(ai_check["grade"], "⚪")
-    status.write(f"본문 완료! {grade_emoji} AI 점수: {ai_check['score']}점 ({ai_check['grade']})")
-    progress.progress(80)
+    for attempt in range(2):  # 최대 2회 (1차 생성 + 1회 재생성)
+        label = "✍️ 본문 생성 중..." if attempt == 0 else "✍️ 품질 개선 재생성 중..."
+        status.update(label=label)
+        status.write(f"gpt-4o 모델로 {'본문 생성' if attempt == 0 else '재생성'} 중... (10~20초)")
 
-    # SEO 검증
-    status.update(label="🔍 SEO 검증 중...")
-    seo_result = run_seo_validation(result["data"], st.session_state.scored_keywords)
+        result = safe_api_call(generate_blog_post, **generate_args)
+        if not result["success"]:
+            status.update(label="본문 생성 오류", state="error")
+            st.error(f"본문 생성 오류: {result['error']}")
+            return False
+
+        blog_text = result["data"]
+
+        # AI 냄새 검증
+        ai_check = get_ai_score(blog_text)
+        grade_emoji = {"좋음": "🟢", "보통": "🟡", "개선필요": "🔴"}.get(ai_check["grade"], "⚪")
+        status.write(f"AI 냄새 {grade_emoji} {ai_check['score']}점 ({ai_check['grade']})")
+
+        # SEO 검증
+        seo_result = run_seo_validation(blog_text, st.session_state.scored_keywords)
+        seo_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(seo_result["grade"], "⚪")
+        status.write(f"SEO {seo_emoji} {seo_result['score']}점 ({seo_result['grade']})")
+
+        # 체류시간 검증
+        engage_result = validate_engagement(blog_text)
+        eng_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(engage_result["grade"], "⚪")
+        status.write(f"체류시간 {eng_emoji} {engage_result['score']}점 ({engage_result['grade']})")
+
+        # 품질 통과 여부 판정 (SEO B이상 + AI 냄새 보통 이상)
+        quality_pass = (
+            seo_result["grade"] in ("A", "B")
+            and ai_check["grade"] in ("좋음", "보통")
+        )
+
+        if quality_pass or attempt == 1:
+            # 통과 또는 마지막 시도 → 확정
+            if not quality_pass:
+                status.write("⚠️ 품질 미달이지만 최종본으로 확정합니다.")
+            break
+
+        # 1차 생성 품질 미달 → SEO 피드백을 memo에 추가하여 재생성
+        status.write("🔄 품질 미달 → 피드백 반영 재생성...")
+        feedback_lines = []
+        for issue in seo_result.get("issues", []):
+            feedback_lines.append(issue)
+        for sug in engage_result.get("suggestions", []):
+            feedback_lines.append(sug)
+        if feedback_lines:
+            feedback_text = "\n".join(f"- {line}" for line in feedback_lines[:5])
+            generate_args["memo"] = full_memo + f"\n\n[품질 개선 지시 - 반드시 반영]\n{feedback_text}"
+
+        progress.progress(80)
+
+    # 최종 결과 저장
+    st.session_state.blog_result = blog_text
     st.session_state["seo_validation"] = seo_result
-    seo_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(seo_result["grade"], "⚪")
-    status.write(f"SEO 검증 {seo_emoji} {seo_result['score']}점 ({seo_result['grade']})")
-    if seo_result["issues"]:
-        for issue in seo_result["issues"][:3]:
-            status.write(f"  ⚠️ {issue}")
-    # 체류시간 최적화 검증
-    engage_result = validate_engagement(result["data"])
     st.session_state["engagement"] = engage_result
-    eng_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(engage_result["grade"], "⚪")
-    status.write(f"체류시간 {eng_emoji} {engage_result['score']}점 ({engage_result['grade']})")
-    if engage_result["suggestions"]:
-        for sug in engage_result["suggestions"][:2]:
-            status.write(f"  💡 {sug}")
     progress.progress(88)
 
     # 발행 타이밍 추천
     pub_time = recommend_publish_time(st.session_state.scored_keywords, restaurant_name)
     st.session_state["publish_time"] = pub_time
     status.write(f"📅 추천 발행: {pub_time['best_time']} ({pub_time['reason']})")
-    status.write(f"  오늘({pub_time['today']}): {pub_time['today_score']}")
     progress.progress(90)
 
     # 해시태그 생성

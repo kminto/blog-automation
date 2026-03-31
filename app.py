@@ -19,7 +19,6 @@ from ui.place_detail import render_place_detail
 from ui.blog_result import render_blog_result
 from ui.advisor import render_advisor_dashboard
 from ui.helpers import set_clipboard
-from ui.quick_mode import render_quick_mode
 
 # === 페이지 설정 ===
 st.set_page_config(
@@ -164,38 +163,31 @@ if _today_topic and not _today_topic.get("done"):
         unsafe_allow_html=True,
     )
 
-# 탭: 일반 모드 / 퀵 모드
-tab_normal, tab_quick = st.tabs(["일반 모드", "퀵 모드"])
+# 현재 작성 중인 글 표시
+current_name = st.session_state.get("draft_restaurant_name", "")
+if current_name:
+    st.markdown(f"#### ✏️ {current_name}")
+elif st.session_state.get("place_detail"):
+    st.markdown(f"#### ✏️ {st.session_state['place_detail'].get('name', '')}")
+else:
+    st.markdown("#### 🍽️ 맛집 블로그 자동화")
+    st.caption("사이드바에서 음식점을 검색하거나, 목록에서 글을 선택하세요.")
 
-with tab_normal:
-    # 현재 작성 중인 글 표시
-    current_name = st.session_state.get("draft_restaurant_name", "")
-    if current_name:
-        st.markdown(f"#### ✏️ {current_name}")
-    elif st.session_state.get("place_detail"):
-        st.markdown(f"#### ✏️ {st.session_state['place_detail'].get('name', '')}")
-    else:
-        st.markdown("#### 🍽️ 맛집 블로그 자동화")
-        st.caption("사이드바에서 음식점을 검색하거나, 목록에서 글을 선택하세요.")
+# 검색 결과
+if st.session_state.search_results and not st.session_state.selected_place:
+    render_search_results()
 
-    # 검색 결과
-    if st.session_state.search_results and not st.session_state.selected_place:
-        render_search_results()
+# 선택된 음식점
+if st.session_state.place_detail:
+    # 새 음식점이면 draft ID 생성
+    if not st.session_state.get("current_draft_id") and is_db_available():
+        new_id = save_draft("", st.session_state)
+        st.session_state["current_draft_id"] = new_id
 
-    # 선택된 음식점
-    if st.session_state.place_detail:
-        # 새 음식점이면 draft ID 생성
-        if not st.session_state.get("current_draft_id") and is_db_available():
-            new_id = save_draft("", st.session_state)
-            st.session_state["current_draft_id"] = new_id
-
-        render_place_detail(
-            on_analyze=None,
-            on_generate=run_full_pipeline,
-        )
-
-with tab_quick:
-    render_quick_mode()
+    render_place_detail(
+        on_analyze=None,
+        on_generate=run_full_pipeline,
+    )
 
 # 키워드 결과 (두 모드 공통)
 if st.session_state.scored_keywords:
