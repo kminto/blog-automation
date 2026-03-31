@@ -34,6 +34,7 @@ def generate_blog_post(
     photo_context: str = "",
     place_detail: dict = None,
     detailed_review: dict = None,
+    visit_reason: str = "",
 ) -> str:
     """블로그 본문을 생성한다."""
     prompt = build_blog_prompt(
@@ -47,6 +48,7 @@ def generate_blog_post(
         photo_context=photo_context,
         place_detail=place_detail,
         detailed_review=detailed_review,
+        visit_reason=visit_reason,
     )
 
     try:

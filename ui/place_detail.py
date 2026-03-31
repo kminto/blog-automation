@@ -124,11 +124,15 @@ def render_place_detail(on_analyze, on_generate):
 
     col_r1, col_r2 = st.columns(2)
     with col_r1:
-        review_best = st.text_input("👍 제일 맛있었던 것", placeholder="채끝 미쳤음", key="review_best")
-        review_worst = st.text_input("👎 아쉬웠던 점", placeholder="양 적음, 소스 아쉬움", key="review_worst")
-    with col_r2:
         companion = st.text_input("👫 동행", placeholder="친구 2명", key="input_companion")
-        review_episode = st.text_input("💬 에피소드", placeholder="옆테이블에서 뭐먹냐고 물어봄", key="review_episode")
+        review_best = st.text_input("👍 제일 맛있었던 것", placeholder="채끝 미쳤음", key="review_best")
+    with col_r2:
+        visit_reason = st.text_input(
+            "🚶 방문 계기",
+            placeholder="친구가 맛집이라고 추천 / 지나가다 발견 / 검색해서",
+            key="input_visit_reason",
+        )
+        review_worst = st.text_input("👎 아쉬웠던 점", placeholder="양 적음, 소스 아쉬움", key="review_worst")
 
     mood = st.text_input("✨ 분위기/내부", placeholder="깔끔, 테이블 넓음, 회식 좋음", key="input_mood")
 
@@ -352,4 +356,5 @@ def render_place_detail(on_analyze, on_generate):
                 final_ordered, my_review,
                 uploaded if uploaded else None,
                 detailed_review=detailed_review,
+                visit_reason=visit_reason,
             )

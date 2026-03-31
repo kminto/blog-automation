@@ -111,6 +111,7 @@ def _run_blog_generation(
     ordered_menus: str, my_review: str, photo_context: str,
     place_detail: dict = None,
     detailed_review: dict = None,
+    visit_reason: str = "",
 ):
     """본문 생성 단계."""
     # 메모 조합
@@ -170,6 +171,7 @@ def _run_blog_generation(
         photo_context=photo_context,
         place_detail=place_detail,
         detailed_review=detailed_review,
+        visit_reason=visit_reason,
     )
     if not result["success"]:
         status.update(label="본문 생성 오류", state="error")
@@ -246,6 +248,7 @@ def run_full_pipeline(
     uploaded_photos: list = None,
     place_detail: dict = None,
     detailed_review: dict = None,
+    visit_reason: str = "",
 ):
     """사진분석 → 키워드분석 → 본문생성 원클릭 파이프라인."""
     progress = st.progress(0)
@@ -280,6 +283,7 @@ def run_full_pipeline(
         ordered_menus, my_review, photo_context,
         place_detail=place_detail,
         detailed_review=detailed_review,
+        visit_reason=visit_reason,
     )
 
     if success:

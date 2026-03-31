@@ -238,6 +238,7 @@ def build_blog_prompt(
     photo_context: str = "",
     place_detail: dict = None,
     detailed_review: dict = None,
+    visit_reason: str = "",
 ) -> str:
     """블로그 본문 생성을 위한 프롬프트를 구성한다."""
 
@@ -308,6 +309,7 @@ def build_blog_prompt(
 지역: {region_text}
 대표 메뉴: {menu_text}
 동행: {companion or "미입력"}
+방문 계기: {visit_reason or "미입력"}
 분위기: {mood or "미입력"}
 메모: {memo or "없음"}
 {ordered_section}
@@ -351,7 +353,7 @@ def build_blog_prompt(
 아래 템플릿 구조를 반드시 따를 것. 예시 글의 형식을 그대로 복제.
 
 필수 구조 (이 순서대로):
-1. 인사 + 가게 소개 + 방문 계기 (3~4줄)
+1. 인사 + 가게 소개 + 방문 계기 (3~4줄, 위 "방문 계기"를 자연스럽게 서론에 녹여쓸 것)
 2. 해시태그 3~5개 (핵심 키워드)
 3. "출처 입력" + "사진 설명을 입력하세요." (외관 사진 자리)
 4. 위치 설명 2~3줄 + 기대감 한줄
