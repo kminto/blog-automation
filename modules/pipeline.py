@@ -136,7 +136,7 @@ def _run_keyword_analysis(
         status.write(f"캐시에서 {len(cached_results)}개 로드 (API 호출 없음)")
     progress.progress(45)
 
-    # 트렌드 분석
+    # 트렌드 분석 (상위 3개만 - 속도 최적화)
     status.update(label="📈 트렌드 분석 중...")
     top_for_trend = sorted(
         keyword_stats,
@@ -145,7 +145,7 @@ def _run_keyword_analysis(
             + (x.get("monthlyMobileQcCnt", 0) if isinstance(x.get("monthlyMobileQcCnt", 0), int) else 5)
         ),
         reverse=True,
-    )[:5]
+    )[:3]  # 5개 → 3개로 축소
     trend_keywords = [kw.get("relKeyword", "") for kw in top_for_trend]
     trend_result = safe_api_call(fetch_search_trend, trend_keywords)
     trend_map = {}
@@ -192,17 +192,9 @@ def _run_blog_generation(
     if my_review and my_review.strip():
         full_memo += "\n\n[내 솔직 후기]\n" + my_review.strip()
 
-    # 경쟁 분석 + 시리즈 정보 수집 (프롬프트 보강용)
-    status.update(label="🔎 경쟁 분석 중...")
+    # 시리즈/내부 링크 정보 수집 (경쟁분석 API 호출 제거 → 속도 개선)
     extra_context = ""
     try:
-        top_kw = (st.session_state.scored_keywords or [{}])[0].get("keyword", "")
-        if top_kw:
-            guide = get_competitive_guide(top_kw, my_char_count=1500)
-            comp_prompt = build_competitor_prompt(guide)
-            extra_context += f"\n{comp_prompt}"
-            status.write(f"🔎 상위 글 분석 완료: {guide.get('recommendation', '')}")
-
         from modules.blog_advisor import load_posting_log
         posting_log = load_posting_log()
         related = find_related_posts(
@@ -213,17 +205,13 @@ def _run_blog_generation(
         if related:
             link_prompt = build_internal_link_prompt(related)
             extra_context += f"\n{link_prompt}"
-            status.write(f"🔗 관련 글 {len(related)}개 발견")
 
         series = suggest_series(region_list[0] if region_list else "", posting_log)
         if series.get("has_series"):
-            extra_context += f"\n[시리즈] {series['series_name']} (이전 글: {', '.join(series['restaurants'])})"
-            status.write(f"📚 {series['series_name']}")
+            extra_context += f"\n[시리즈] {series['series_name']}"
     except Exception:
         pass
-    progress.progress(65)
 
-    # 경쟁 분석 결과를 memo에 추가
     if extra_context:
         full_memo += f"\n\n{extra_context}"
 

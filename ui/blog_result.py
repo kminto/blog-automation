@@ -44,14 +44,27 @@ def render_blog_result():
         key="ta_body",
     )
 
-    # 최종본 확정 버튼
+    # 버튼들
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        if st.button("✅ 최종본 확정 (다음 글에 이 구조 반영)", use_container_width=True, key="btn_save_gold"):
+        if st.button("✅ 최종본 확정", use_container_width=True, key="btn_save_gold"):
             place = st.session_state.get("place_detail", {})
             name = place.get("name", "알 수 없음") if isinstance(place, dict) else "알 수 없음"
             save_gold_example(name, edited_body)
-            st.success(f"골드 예시로 저장 완료! 다음 글 생성 시 이 구조를 참고합니다.")
+            st.success("골드 예시 저장! 다음 글에 이 구조가 반영됩니다.")
+    with col_btn2:
+        # 제목 + 본문 + 해시태그 한번에 조합
+        hashtags = st.session_state.get("hashtags", [])
+        titles = sections.get("titles", "")
+        first_title = titles.split("\n")[0].strip() if titles else ""
+        full_copy = f"{edited_body}\n\n{' '.join(hashtags)}" if hashtags else edited_body
+        st.text_area(
+            "📋 전체 복사용 (본문 + 해시태그)",
+            value=full_copy,
+            height=80,
+            key="ta_full_copy",
+            label_visibility="collapsed",
+        )
 
     # 해시태그
     hashtags = st.session_state.get("hashtags")

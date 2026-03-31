@@ -73,9 +73,9 @@ def fetch_keyword_stats_batch(keywords: list[str]) -> list[dict]:
     batches = [keywords[i:i + 5] for i in range(0, len(keywords), 5)]
 
     for idx, batch in enumerate(batches):
-        # 두 번째 배치부터 1.5초 대기 (429 방지)
+        # 두 번째 배치부터 1.0초 대기 (429 시 자동 재시도)
         if idx > 0:
-            time.sleep(1.5)
+            time.sleep(1.0)
 
         try:
             results = fetch_keyword_stats(batch)

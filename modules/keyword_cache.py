@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 CACHE_FILE = os.path.join(DATA_DIR, "keyword_cache.json")
-CACHE_TTL_DAYS = 7
+CACHE_TTL_DAYS = 14  # 검색량은 급변하지 않으므로 2주
 
 
 def _load_cache() -> dict:
