@@ -91,14 +91,6 @@ def render_place_detail(on_analyze, on_generate):
     if info_parts:
         st.caption(" · ".join(info_parts))
 
-    # === 🚀 생성 버튼 (항상 상단) ===
-    btn_generate = st.button(
-        "🚀 키워드 분석 + 본문 생성",
-        use_container_width=True,
-        type="primary",
-        key="btn_full_pipeline",
-    )
-
     st.divider()
 
     # === 입력 영역 (생성 후에는 접이식) ===
@@ -173,6 +165,14 @@ def render_place_detail(on_analyze, on_generate):
 
         # 메모
         memo = st.text_area("📝 메모 (선택)", value=build_auto_memo(info), height=50, key="input_memo")
+
+    # === 🚀 생성 버튼 (입력 바로 아래) ===
+    btn_generate = st.button(
+        "🚀 키워드 분석 + 본문 생성",
+        use_container_width=True,
+        type="primary",
+        key="btn_full_pipeline",
+    )
 
     # === 생성 실행 ===
     if btn_generate:

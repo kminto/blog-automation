@@ -80,16 +80,6 @@ def render_blog_result():
 
     st.divider()
 
-    # 네이버 블로그 글쓰기 버튼
-    st.markdown(
-        '<a href="https://blog.naver.com/GoBlogWrite.naver" target="_blank">'
-        '<button style="background:#03c75a;color:white;border:none;'
-        'padding:12px 24px;border-radius:8px;font-size:16px;'
-        'cursor:pointer;width:100%;margin-bottom:16px;">'
-        '✏️ 네이버 블로그 글쓰기 열기</button></a>',
-        unsafe_allow_html=True,
-    )
-
     # 제목 후보
     if sections["titles"]:
         st.subheader("📌 제목 후보")
