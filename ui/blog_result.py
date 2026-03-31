@@ -120,29 +120,46 @@ def render_blog_result():
             key="ta_titles",
         )
 
-    # 본문 (텍스트 / HTML 탭)
+    # 본문 (네이버 에디터 붙여넣기용)
     st.subheader("📝 본문")
-    tab_text, tab_html = st.tabs(["텍스트 (일반 복사)", "HTML (서식 복사)"])
-    with tab_text:
-        st.text_area("본문 텍스트", value=sections["body"], height=400, key="ta_body")
-    with tab_html:
-        body_html = blog_text_to_html(sections["body"])
-        st.markdown(
-            '<p style="color:#666;font-size:13px;">'
-            '📋 복사 → 네이버 에디터에 붙여넣기</p>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f'<div style="border:1px solid #ddd;padding:20px;border-radius:8px;'
-            f'max-height:500px;overflow-y:auto;background:white;">'
-            f'{body_html}</div>',
-            unsafe_allow_html=True,
-        )
+    st.caption("아래 텍스트를 전체 선택(Ctrl+A) → 복사(Ctrl+C) → 네이버 에디터에 붙여넣기")
+    st.text_area(
+        "본문 (복사용)",
+        value=sections["body"],
+        height=500,
+        key="ta_body",
+    )
+
+    # SEO/체류시간 검증 결과 (있으면)
+    seo = st.session_state.get("seo_validation")
+    eng = st.session_state.get("engagement")
+    pub = st.session_state.get("publish_time")
+    if seo or eng:
+        with st.expander("📊 품질 리포트", expanded=False):
+            if seo:
+                seo_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(seo["grade"], "⚪")
+                st.markdown(f"**SEO** {seo_emoji} {seo['score']}점 ({seo['grade']})")
+                for iss in seo.get("issues", []):
+                    st.caption(f"  ⚠️ {iss}")
+            if eng:
+                eng_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(eng["grade"], "⚪")
+                st.markdown(f"**체류시간** {eng_emoji} {eng['score']}점 ({eng['grade']})")
+                for sug in eng.get("suggestions", []):
+                    st.caption(f"  💡 {sug}")
+            if pub:
+                st.markdown(f"**발행 추천** {pub['best_time']} ({pub['reason']})")
 
     # 해시태그
     if sections["hashtags"]:
         st.subheader("🏷 해시태그")
         st.code(sections["hashtags"], language=None)
 
-    # 자동 포스팅 섹션
-    _render_auto_post_section(sections)
+    # HTML 보기 (접이식)
+    with st.expander("HTML 미리보기 (선택사항)", expanded=False):
+        body_html = blog_text_to_html(sections["body"])
+        st.markdown(
+            f'<div style="border:1px solid #ddd;padding:20px;border-radius:8px;'
+            f'max-height:500px;overflow-y:auto;background:white;">'
+            f'{body_html}</div>',
+            unsafe_allow_html=True,
+        )

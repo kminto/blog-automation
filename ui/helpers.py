@@ -13,20 +13,64 @@ def set_clipboard(key: str, text: str):
 
 def parse_blog_sections(text: str) -> dict:
     """생성된 블로그 텍스트에서 제목/본문/해시태그를 분리한다."""
+    import re
+
     sections = {"titles": "", "body": "", "hashtags": ""}
-    if "### 본문" in text:
-        parts = text.split("### 본문")
-        sections["titles"] = parts[0].replace("### 제목 후보", "").strip()
-        body_part = parts[1]
-        if "### 해시태그" in body_part:
-            body_parts = body_part.split("### 해시태그")
-            sections["body"] = body_parts[0].strip()
-            sections["hashtags"] = body_parts[1].strip()
-        else:
-            sections["body"] = body_part.strip()
-    else:
-        sections["body"] = text
+
+    # 제목 섹션 분리 (### 제목 후보, ## 제목 후보, 제목 후보 등 유연하게)
+    title_patterns = [r"#{1,3}\s*제목\s*후보", r"제목\s*후보"]
+    body_patterns = [r"#{1,3}\s*본문"]
+    hashtag_patterns = [r"#{1,3}\s*해시태그", r"🏷\s*해시태그"]
+
+    # 본문 시작점 찾기
+    body_start = 0
+    for pattern in body_patterns:
+        match = re.search(pattern, text)
+        if match:
+            # 제목 = 본문 시작 전까지
+            title_part = text[:match.start()]
+            for tp in title_patterns:
+                title_part = re.sub(tp, "", title_part)
+            sections["titles"] = _clean_markdown(title_part.strip())
+            body_start = match.end()
+            break
+
+    remaining = text[body_start:]
+
+    # 해시태그 시작점 찾기
+    hashtag_start = len(remaining)
+    for pattern in hashtag_patterns:
+        match = re.search(pattern, remaining)
+        if match:
+            hashtag_start = match.start()
+            sections["hashtags"] = remaining[match.end():].strip()
+            # 해시태그 뒤에 또 다른 섹션이 있으면 잘라내기
+            next_section = re.search(r"#{1,3}\s*(AI|품질|SEO)", sections["hashtags"])
+            if next_section:
+                sections["hashtags"] = sections["hashtags"][:next_section.start()].strip()
+            break
+
+    sections["body"] = _clean_markdown(remaining[:hashtag_start].strip())
+
+    # 본문이 비어있으면 전체를 본문으로
+    if not sections["body"]:
+        sections["body"] = _clean_markdown(text)
+
     return sections
+
+
+def _clean_markdown(text: str) -> str:
+    """본문에서 마크다운 잔재를 제거하여 순수 텍스트로 만든다."""
+    import re
+    # ### 제목, ## 제목 제거 (줄 시작)
+    text = re.sub(r"^#{1,3}\s+.+$", lambda m: m.group().lstrip("#").strip(), text, flags=re.MULTILINE)
+    # **굵은글씨** 제거
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    # --- 구분선 제거
+    text = re.sub(r"^-{3,}$", "", text, flags=re.MULTILINE)
+    # 빈 줄 3개 이상 → 2개로
+    text = re.sub(r"\n{4,}", "\n\n\n", text)
+    return text.strip()
 
 
 def build_my_review(
