@@ -20,7 +20,63 @@ from modules.publish_scheduler import recommend_publish_time
 from modules.series_planner import suggest_series, find_related_posts, build_internal_link_prompt
 from modules.competitor_analyzer import get_competitive_guide, build_competitor_prompt
 from modules.photo_analyzer import analyze_photos, build_photo_context, extract_menus_from_analysis
+from modules.post_processor import process_blog_text
 from utils.api_utils import safe_api_call
+
+
+def _grade_emoji(grade: str, mode: str = "ai") -> str:
+    """등급별 이모지를 반환한다."""
+    if mode == "seo":
+        return {"A": "🟢", "B": "🟡", "C": "🔴"}.get(grade, "⚪")
+    return {"좋음": "🟢", "보통": "🟡", "개선필요": "🔴"}.get(grade, "⚪")
+
+
+def _revise_blog_text(original_text: str, feedback: str) -> str:
+    """1차 본문을 피드백 기반으로 직접 수정한다."""
+    import os
+    from openai import OpenAI
+    try:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            max_tokens=4096,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "당신은 블로그 글을 수정하는 편집자입니다. "
+                        "원본 글의 말투와 구조를 유지하면서 피드백만 반영하세요. "
+                        "새로운 내용을 지어내지 말고, 기존 내용을 보강/확장만 하세요. "
+                        "~합니다 금지, ~했어요/~더라고요 유지."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"""아래 블로그 글을 피드백에 따라 수정해주세요.
+원본 글의 말투/톤/구조를 그대로 유지하면서 부족한 부분만 보강하세요.
+
+[원본 글]
+{original_text}
+
+[수정 피드백 - 모두 반영할 것]
+{feedback}
+
+[규칙]
+- 원본 글의 문체/어미를 그대로 유지
+- "출처 입력" + "사진 설명을 입력하세요." 사진 자리 유지
+- 본문만 출력 (제목/해시태그 제외)
+- 마크다운(**, ##, ---) 사용 금지
+- 해시태그 넣지 말 것""",
+                },
+            ],
+        )
+        revised = response.choices[0].message.content
+        # 거부 응답 감지
+        if any(p in revised[:50] for p in ["죄송", "처리할 수 없"]):
+            return ""
+        return process_blog_text(revised)
+    except Exception:
+        return ""
 
 
 def _run_photo_analysis(status, progress, uploaded_photos: list) -> str:
@@ -163,8 +219,11 @@ def _run_blog_generation(
     if extra_context:
         full_memo += f"\n\n{extra_context}"
 
-    # 본문 생성 + 품질 검증 + 자동 재생성 (최대 1회)
-    generate_args = dict(
+    # 1차 본문 생성
+    status.update(label="✍️ 본문 생성 중...")
+    status.write("gpt-4o 모델로 본문 생성 중... (10~20초)")
+    result = safe_api_call(
+        generate_blog_post,
         restaurant_name=restaurant_name,
         regions=region_list,
         menus=menu_list,
@@ -177,59 +236,70 @@ def _run_blog_generation(
         detailed_review=detailed_review,
         visit_reason=visit_reason,
     )
+    if not result["success"]:
+        status.update(label="본문 생성 오류", state="error")
+        st.error(f"본문 생성 오류: {result['error']}")
+        return False
 
-    for attempt in range(2):  # 최대 2회 (1차 생성 + 1회 재생성)
-        label = "✍️ 본문 생성 중..." if attempt == 0 else "✍️ 품질 개선 재생성 중..."
-        status.update(label=label)
-        status.write(f"gpt-4o 모델로 {'본문 생성' if attempt == 0 else '재생성'} 중... (10~20초)")
+    blog_text = result["data"]
+    progress.progress(75)
 
-        result = safe_api_call(generate_blog_post, **generate_args)
-        if not result["success"]:
-            status.update(label="본문 생성 오류", state="error")
-            st.error(f"본문 생성 오류: {result['error']}")
-            return False
+    # 품질 검증
+    status.update(label="🔍 품질 검증 중...")
+    ai_check = get_ai_score(blog_text)
+    seo_result = run_seo_validation(blog_text, st.session_state.scored_keywords)
+    engage_result = validate_engagement(blog_text)
 
-        blog_text = result["data"]
+    status.write(f"AI 냄새 {_grade_emoji(ai_check['grade'])} {ai_check['score']}점")
+    status.write(f"SEO {_grade_emoji(seo_result['grade'], 'seo')} {seo_result['score']}점")
+    status.write(f"체류시간 {_grade_emoji(engage_result['grade'], 'seo')} {engage_result['score']}점")
 
-        # AI 냄새 검증
-        ai_check = get_ai_score(blog_text)
-        grade_emoji = {"좋음": "🟢", "보통": "🟡", "개선필요": "🔴"}.get(ai_check["grade"], "⚪")
-        status.write(f"AI 냄새 {grade_emoji} {ai_check['score']}점 ({ai_check['grade']})")
+    # 품질 통과 판정
+    quality_pass = (
+        seo_result["grade"] in ("A", "B")
+        and ai_check["grade"] in ("좋음", "보통")
+        and engage_result["grade"] in ("A", "B")
+    )
 
-        # SEO 검증
-        seo_result = run_seo_validation(blog_text, st.session_state.scored_keywords)
-        seo_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(seo_result["grade"], "⚪")
-        status.write(f"SEO {seo_emoji} {seo_result['score']}점 ({seo_result['grade']})")
-
-        # 체류시간 검증
-        engage_result = validate_engagement(blog_text)
-        eng_emoji = {"A": "🟢", "B": "🟡", "C": "🔴"}.get(engage_result["grade"], "⚪")
-        status.write(f"체류시간 {eng_emoji} {engage_result['score']}점 ({engage_result['grade']})")
-
-        # 품질 통과 여부 판정 (SEO B이상 + AI 냄새 보통 이상)
-        quality_pass = (
-            seo_result["grade"] in ("A", "B")
-            and ai_check["grade"] in ("좋음", "보통")
-        )
-
-        if quality_pass or attempt == 1:
-            # 통과 또는 마지막 시도 → 확정
-            if not quality_pass:
-                status.write("⚠️ 품질 미달이지만 최종본으로 확정합니다.")
-            break
-
-        # 1차 생성 품질 미달 → SEO 피드백을 memo에 추가하여 재생성
-        status.write("🔄 품질 미달 → 피드백 반영 재생성...")
+    if not quality_pass:
+        # 피드백 수집
         feedback_lines = []
         for issue in seo_result.get("issues", []):
             feedback_lines.append(issue)
         for sug in engage_result.get("suggestions", []):
             feedback_lines.append(sug)
-        if feedback_lines:
-            feedback_text = "\n".join(f"- {line}" for line in feedback_lines[:5])
-            generate_args["memo"] = full_memo + f"\n\n[품질 개선 지시 - 반드시 반영]\n{feedback_text}"
+        if ai_check["grade"] == "개선필요":
+            feedback_lines.append("AI 냄새 제거: 격식체(합니다/됩니다)→구어체(해요/더라고요), 과장 표현 제거")
 
-        progress.progress(80)
+        if feedback_lines:
+            status.write("🔄 품질 미달 → 1차 본문 기반으로 개선 중...")
+            progress.progress(80)
+
+            # 1차 본문 + 피드백으로 직접 수정 요청 (새로 생성이 아닌 수정)
+            feedback_text = "\n".join(f"- {line}" for line in feedback_lines)
+            revision_result = _revise_blog_text(blog_text, feedback_text)
+
+            if revision_result:
+                blog_text = revision_result
+
+                # 재검증
+                ai_check = get_ai_score(blog_text)
+                seo_result = run_seo_validation(blog_text, st.session_state.scored_keywords)
+                engage_result = validate_engagement(blog_text)
+
+                status.write(f"개선 후: AI {_grade_emoji(ai_check['grade'])} / "
+                             f"SEO {_grade_emoji(seo_result['grade'], 'seo')} / "
+                             f"체류 {_grade_emoji(engage_result['grade'], 'seo')}")
+
+                # 재검증 후에도 미달이면 부족한 입력 안내
+                still_issues = seo_result.get("issues", []) + engage_result.get("suggestions", [])
+                if still_issues:
+                    for issue in still_issues[:3]:
+                        status.write(f"  ⚠️ {issue}")
+            else:
+                status.write("⚠️ 개선 재생성 실패 → 1차 본문 사용")
+
+    progress.progress(85)
 
     # 최종 결과 저장
     st.session_state.blog_result = blog_text
