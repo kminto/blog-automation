@@ -124,11 +124,23 @@ def _render_input_tab(info: dict, auto_regions: list, auto_menus: list):
 
         col_m1, col_m2 = st.columns(2)
         with col_m1:
-            parking_info = st.text_input("🅿️ 주차", value=auto_parking, key="input_parking")
-            access_info = st.text_input("🚇 접근성", value=auto_access, key="input_access")
+            parking_info = st.text_input(
+                "🅿️ 주차", key="input_parking",
+                value=st.session_state.get("input_parking") or auto_parking,
+            )
+            access_info = st.text_input(
+                "🚇 접근성", key="input_access",
+                value=st.session_state.get("input_access") or auto_access,
+            )
         with col_m2:
-            restroom = st.text_input("🚻 화장실", value=auto_restroom, key="input_restroom")
-            facilities = st.text_input("🪑 편의시설", value=auto_facilities, key="input_facilities")
+            restroom = st.text_input(
+                "🚻 화장실", key="input_restroom",
+                value=st.session_state.get("input_restroom") or auto_restroom,
+            )
+            facilities = st.text_input(
+                "🪑 편의시설", key="input_facilities",
+                value=st.session_state.get("input_facilities") or auto_facilities,
+            )
 
     with st.expander("🍽 세분화 후기 (선택 — 더 정확한 글)", expanded=False):
         col_sd1, col_sd2 = st.columns(2)
@@ -212,10 +224,19 @@ def render_place_detail(on_analyze, on_generate):
             with st.spinner("조회 중..."):
                 updated = fetch_place_detail(name=info.get("name", ""))
             if updated:
-                # 기존 정보에 새로 가져온 정보 덮어쓰기
                 info.update(updated)
                 st.session_state.place_detail = info
-                st.success("최신 정보 업데이트 완료!")
+                # 입력란 세션값도 새 정보로 갱신 (빈 값 덮어쓰기)
+                auto_map = {
+                    "input_parking": " / ".join(updated.get("parking_details", [])),
+                    "input_restroom": " / ".join(updated.get("restroom_info", [])),
+                    "input_access": " / ".join(updated.get("access_info", [])),
+                    "input_facilities": " / ".join(updated.get("facilities_info", [])),
+                }
+                for key, val in auto_map.items():
+                    if val:  # 새 값이 있으면 덮어쓰기
+                        st.session_state[key] = val
+                st.success("최신 정보 업데이트!")
                 st.rerun()
 
     _render_store_info(info)
