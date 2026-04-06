@@ -271,12 +271,22 @@ def _run_blog_generation(
             status.write("🔄 품질 미달 → 1차 본문 기반으로 개선 중...")
             progress.progress(80)
 
+            # 제목 섹션 보존 (재생성 시 본문만 수정되므로)
+            from ui.helpers import parse_blog_sections
+            original_sections = parse_blog_sections(blog_text)
+            saved_titles = original_sections.get("titles", "")
+
             # 1차 본문 + 피드백으로 직접 수정 요청 (새로 생성이 아닌 수정)
             feedback_text = "\n".join(f"- {line}" for line in feedback_lines)
             revision_result = _revise_blog_text(blog_text, feedback_text)
 
             if revision_result:
-                blog_text = revision_result
+                # 제목이 사라졌으면 원본 제목 복원
+                revised_sections = parse_blog_sections(revision_result)
+                if saved_titles and not revised_sections.get("titles", "").strip():
+                    blog_text = f"### 제목 후보\n{saved_titles}\n\n### 본문\n{revision_result}"
+                else:
+                    blog_text = revision_result
 
                 # 재검증
                 ai_check = get_ai_score(blog_text)
