@@ -31,8 +31,17 @@ def _get_client() -> "Client":
 
 
 def is_db_available() -> bool:
-    """DB 사용 가능 여부를 확인한다."""
-    return _get_client() is not None
+    """DB 사용 가능 여부를 확인한다. 실제 연결 테스트 포함."""
+    client = _get_client()
+    if not client:
+        return False
+    try:
+        client.table("drafts").select("id").limit(1).execute()
+        return True
+    except Exception as e:
+        import streamlit as _st
+        _st.error(f"DB 연결 실패: {e}")
+        return False
 
 
 # === 작성 중인 글 목록 관리 ===
@@ -157,7 +166,9 @@ def list_drafts() -> list[dict]:
             .limit(20) \
             .execute()
         return result.data or []
-    except Exception:
+    except Exception as e:
+        import streamlit as _st
+        _st.error(f"글 목록 조회 실패: {e}")
         return []
 
 
