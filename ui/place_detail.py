@@ -78,9 +78,18 @@ def render_place_detail(on_analyze, on_generate):
             st.session_state.place_detail = info
 
     # === 헤더 ===
-    col_name, col_refresh = st.columns([5, 1])
+    col_name, col_save, col_refresh = st.columns([5, 1, 1])
     with col_name:
         st.subheader(f"🏪 {info['name']}")
+    with col_save:
+        if st.button("💾", key="btn_save_draft", help="중간 저장"):
+            from modules.db import is_db_available, save_draft
+            if is_db_available():
+                draft_id = st.session_state.get("current_draft_id", "")
+                saved_id = save_draft(draft_id, st.session_state)
+                if saved_id and saved_id != draft_id:
+                    st.session_state["current_draft_id"] = saved_id
+                st.toast("💾 저장 완료!")
     with col_refresh:
         if st.button("🔄", key="btn_refresh", help="최신 정보 다시 가져오기"):
             with st.spinner("조회 중..."):
