@@ -172,7 +172,23 @@ def delete_draft(draft_id: str):
 
 
 def restore_draft_to_session(draft: dict):
-    """draft 데이터를 세션 상태에 복원한다."""
+    """draft 데이터를 세션 상태에 복원한다. 기존 입력값을 먼저 초기화."""
+    # 모든 입력 필드 초기화 (이전 글 잔여값 제거)
+    all_input_keys = [
+        "input_regions", "input_menus", "input_ordered",
+        "input_companion", "input_mood", "input_visit_reason", "input_memo",
+        "input_parking", "input_access", "input_restroom", "input_facilities",
+        "input_exterior", "input_side_menu",
+        "review_best", "review_worst", "review_episode",
+        "review_vibe", "review_cook", "review_wait", "review_revisit",
+        "sd_items", "sd_taste", "sd_refill", "sd_highlight",
+        "sv_staff", "sv_extras",
+        "pr_eval", "pr_complaints", "pr_revisit", "pr_recommend",
+    ]
+    for key in all_input_keys:
+        st.session_state[key] = ""
+
+    # DB → 세션 복원
     restore_map = {
         "input_regions": "regions",
         "input_menus": "menus",
