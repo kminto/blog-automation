@@ -90,6 +90,7 @@ def render_place_detail(on_analyze, on_generate):
                 if saved_id and saved_id != draft_id:
                     st.session_state["current_draft_id"] = saved_id
                 st.toast("💾 저장 완료!")
+                st.rerun()
     with col_refresh:
         if st.button("🔄", key="btn_refresh", help="최신 정보 다시 가져오기"):
             with st.spinner("조회 중..."):
