@@ -183,7 +183,9 @@ if st.session_state.place_detail:
     # 새 음식점이면 draft ID 생성
     if not st.session_state.get("current_draft_id") and is_db_available():
         new_id = save_draft("", st.session_state)
-        st.session_state["current_draft_id"] = new_id
+        if new_id:
+            st.session_state["current_draft_id"] = new_id
+            st.rerun()  # 사이드바 목록 즉시 갱신
 
     render_place_detail(
         on_analyze=None,

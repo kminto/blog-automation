@@ -113,17 +113,19 @@ def save_draft(draft_id: str, session_state: dict) -> str:
         result = client.table("drafts").upsert(data).execute()
         if result.data:
             return result.data[0].get("id", draft_id)
-    except Exception:
+    except Exception as e:
         # detailed_review_inputs 컬럼이 없으면 제거 후 재시도
         try:
             data.pop("detailed_review_inputs", None)
             result = client.table("drafts").upsert(data).execute()
             if result.data:
                 return result.data[0].get("id", draft_id)
-        except Exception:
-            pass
+        except Exception as e2:
+            import streamlit as _st
+            _st.error(f"DB 저장 실패: {e2}")
+            return ""
 
-    return draft_id
+    return draft_id or ""
 
 
 def load_draft(draft_id: str) -> dict:

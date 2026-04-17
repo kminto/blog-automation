@@ -85,12 +85,16 @@ def render_place_detail(on_analyze, on_generate):
         if st.button("💾", key="btn_save_draft", help="중간 저장"):
             from modules.db import is_db_available, save_draft
             if is_db_available():
-                draft_id = st.session_state.get("current_draft_id", "")
+                draft_id = st.session_state.get("current_draft_id") or ""
                 saved_id = save_draft(draft_id, st.session_state)
-                if saved_id and saved_id != draft_id:
+                if saved_id:
                     st.session_state["current_draft_id"] = saved_id
-                st.toast("💾 저장 완료!")
+                    st.toast("💾 저장 완료!")
+                else:
+                    st.error("저장 실패 — DB 연결을 확인해주세요")
                 st.rerun()
+            else:
+                st.error("DB 연결 불가 — Supabase 설정을 확인해주세요")
     with col_refresh:
         if st.button("🔄", key="btn_refresh", help="최신 정보 다시 가져오기"):
             with st.spinner("조회 중..."):
