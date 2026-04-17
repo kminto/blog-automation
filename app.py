@@ -67,8 +67,10 @@ with st.sidebar:
 
         # 새 글 작성 버튼
         if st.button("➕ 새 글 작성", use_container_width=True, key="btn_new_draft"):
-            # 현재 작업 저장
-            if st.session_state.get("place_detail") and st.session_state.get("current_draft_id"):
+            # 현재 작업 저장 (입력값이 있을 때만)
+            if (st.session_state.get("place_detail")
+                    and st.session_state.get("current_draft_id")
+                    and st.session_state.get("input_ordered", "").strip()):
                 save_draft(st.session_state["current_draft_id"], st.session_state)
             # 세션 초기화
             for key in [
@@ -95,8 +97,10 @@ with st.sidebar:
                         key=f"draft_{d['id']}",
                         use_container_width=True,
                     ):
-                        # 현재 작업 저장
-                        if st.session_state.get("place_detail") and st.session_state.get("current_draft_id"):
+                        # 현재 작업 저장 (입력값이 있을 때만 - 빈 세션 덮어쓰기 방지)
+                        if (st.session_state.get("place_detail")
+                                and st.session_state.get("current_draft_id")
+                                and st.session_state.get("input_ordered", "").strip()):
                             save_draft(st.session_state["current_draft_id"], st.session_state)
                         # 선택한 draft 복원
                         full_draft = load_draft(d["id"])
@@ -141,7 +145,8 @@ with st.sidebar:
 
 # === 초기화 ===
 if btn_reset:
-    if st.session_state.get("current_draft_id"):
+    if (st.session_state.get("current_draft_id")
+            and st.session_state.get("input_ordered", "").strip()):
         save_draft(st.session_state["current_draft_id"], st.session_state)
     for key in [
         "keyword_results", "scored_keywords", "blog_result",
