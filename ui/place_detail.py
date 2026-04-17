@@ -204,9 +204,10 @@ def render_place_detail(on_analyze, on_generate):
             placeholder="볶음밥, 디저트",
             key="input_side_menu",
         )
-        st.text_input(
+        st.text_area(
             "맛 평가",
-            placeholder="전체적으로 간이 딱, 소스 특이",
+            placeholder="전체적으로 간이 딱, 소스 특이\n고기 육즙 좋음, 밑반찬 정성스러움",
+            height=100,
             key="sd_taste",
         )
 
@@ -215,11 +216,24 @@ def render_place_detail(on_analyze, on_generate):
         col_t1, col_t2 = st.columns(2)
         with col_t1:
             st.text_input(
+                "가격 · 가성비",
+                placeholder="1인 15,000원, 가성비 좋음",
+                key="pr_eval",
+            )
+        with col_t2:
+            st.text_input(
+                "서비스",
+                placeholder="친절, 직접 잘라줌",
+                key="sv_staff",
+            )
+        col_t3, col_t4 = st.columns(2)
+        with col_t3:
+            st.text_input(
                 "재방문 의사",
                 placeholder="100% 재방문",
                 key="pr_revisit",
             )
-        with col_t2:
+        with col_t4:
             st.text_input(
                 "추천 대상 · 이유",
                 placeholder="데이트, 가족 모임",
@@ -227,7 +241,7 @@ def render_place_detail(on_analyze, on_generate):
             )
         st.text_input(
             "아쉬운 점 (선택)",
-            placeholder="웨이팅 길어요, 가격 있는 편",
+            placeholder="웨이팅 길어요, 양 적음",
             key="pr_complaints",
         )
 
