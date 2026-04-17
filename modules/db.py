@@ -103,6 +103,15 @@ def save_draft(draft_id: str, session_state: dict) -> str:
         "pr_recommend": session_state.get("pr_recommend", ""),
         "exterior": session_state.get("input_exterior", ""),
         "side_menu": session_state.get("input_side_menu", ""),
+        "reservation": session_state.get("input_reservation", ""),
+        "visit_time": session_state.get("input_visit_time", ""),
+        "party_size": session_state.get("input_party_size", ""),
+        "waiting": session_state.get("input_waiting", ""),
+        "food_wait": session_state.get("input_food_wait", ""),
+        "total_price": session_state.get("input_total_price", ""),
+        "tip": session_state.get("input_tip", ""),
+        "next_menu": session_state.get("input_next_menu", ""),
+        "own_money": "1" if session_state.get("input_own_money") else "",
     }
     # 빈 값 제거 후 저장
     detailed_filled = {k: v for k, v in detailed_fields.items() if v}
@@ -192,6 +201,9 @@ def restore_draft_to_session(draft: dict):
         "input_companion", "input_mood", "input_visit_reason", "input_memo",
         "input_parking", "input_access", "input_restroom", "input_facilities",
         "input_exterior", "input_side_menu",
+        "input_reservation", "input_visit_time", "input_party_size",
+        "input_waiting", "input_food_wait", "input_total_price",
+        "input_tip", "input_next_menu",
         "review_best", "review_worst", "review_episode",
         "review_vibe", "review_cook", "review_wait", "review_revisit",
         "sd_items", "sd_taste", "sd_refill", "sd_highlight",
@@ -237,10 +249,17 @@ def restore_draft_to_session(draft: dict):
             "parking": "input_parking", "access": "input_access",
             "restroom": "input_restroom", "facilities": "input_facilities",
             "exterior": "input_exterior", "side_menu": "input_side_menu",
+            "reservation": "input_reservation", "visit_time": "input_visit_time",
+            "party_size": "input_party_size", "waiting": "input_waiting",
+            "food_wait": "input_food_wait", "total_price": "input_total_price",
+            "tip": "input_tip", "next_menu": "input_next_menu",
         }
         for key, value in detailed.items():
             session_key = key_map.get(key, key)
-            st.session_state[session_key] = value
+            if key == "own_money":
+                st.session_state["input_own_money"] = bool(value)
+            else:
+                st.session_state[session_key] = value
 
 
 # === 포스팅 기록 ===

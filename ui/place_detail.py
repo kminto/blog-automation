@@ -63,6 +63,26 @@ def _build_detailed_review_from_form() -> dict:
         if menu_reviews:
             review["menu_reviews"] = menu_reviews
 
+    # 새 항목들
+    new_fields = {
+        "input_reservation": "reservation",
+        "input_visit_time": "visit_time",
+        "input_party_size": "party_size",
+        "input_waiting": "waiting",
+        "input_food_wait": "food_wait_time",
+        "input_total_price": "total_price",
+        "input_tip": "tip",
+        "input_next_menu": "next_menu",
+    }
+    for session_key, review_key in new_fields.items():
+        val = st.session_state.get(session_key, "")
+        if val and val.strip():
+            review[review_key] = val
+
+    # 내돈내산
+    if st.session_state.get("input_own_money"):
+        review["own_money"] = True
+
     return review if review else None
 
 
@@ -152,6 +172,32 @@ def render_place_detail(on_analyze, on_generate):
                 placeholder="인스타 추천, 지인 소개",
                 key="input_visit_reason",
             )
+        col_s3, col_s4 = st.columns(2)
+        with col_s3:
+            st.text_input(
+                "예약 방법",
+                placeholder="네이버/캐치테이블/전화/현장",
+                key="input_reservation",
+            )
+        with col_s4:
+            st.text_input(
+                "방문 시간대",
+                placeholder="점심/저녁/브런치/야식",
+                key="input_visit_time",
+            )
+        col_s5, col_s6 = st.columns(2)
+        with col_s5:
+            st.text_input(
+                "방문 인원",
+                placeholder="2명, 4명",
+                key="input_party_size",
+            )
+        with col_s6:
+            st.text_input(
+                "웨이팅",
+                placeholder="없음/10분/30분+",
+                key="input_waiting",
+            )
 
         # ── 📍 매장 ──
         st.markdown("**📍 매장**")
@@ -209,7 +255,7 @@ def render_place_detail(on_analyze, on_generate):
         )
         st.text_area(
             "주문 메뉴 · 한줄평 *",
-            placeholder="팟타이 - 면 쫄깃\n똠양꿍 - 국물 시원",
+            placeholder="팟타이 12,000원 - 면 쫄깃\n똠양꿍 15,000원 - 국물 시원",
             height=80,
             key="input_ordered",
         )
@@ -224,15 +270,20 @@ def render_place_detail(on_analyze, on_generate):
             height=100,
             key="sd_taste",
         )
+        st.text_input(
+            "음식 나오는 시간",
+            placeholder="주문 후 10분",
+            key="input_food_wait",
+        )
 
         # ── ⭐ 총평 ──
         st.markdown("**⭐ 총평**")
         col_t1, col_t2 = st.columns(2)
         with col_t1:
             st.text_input(
-                "가격 · 가성비",
-                placeholder="1인 15,000원, 가성비 좋음",
-                key="pr_eval",
+                "총 결제금액",
+                placeholder="2인 58,000원",
+                key="input_total_price",
             )
         with col_t2:
             st.text_input(
@@ -254,10 +305,21 @@ def render_place_detail(on_analyze, on_generate):
                 key="pr_recommend",
             )
         st.text_input(
+            "추천 조합 · 꿀팁",
+            placeholder="삼겹살+된장찌개 세트 강추, 소주보다 하이볼",
+            key="input_tip",
+        )
+        st.text_input(
+            "다음에 먹어볼 메뉴",
+            placeholder="냉면, 갈비탕",
+            key="input_next_menu",
+        )
+        st.text_input(
             "아쉬운 점 (선택)",
             placeholder="웨이팅 길어요, 양 적음",
             key="pr_complaints",
         )
+        st.checkbox("내돈내산", key="input_own_money", value=True)
 
     # === 🚀 생성 버튼 ===
     btn_generate = st.button(

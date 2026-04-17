@@ -233,10 +233,49 @@ def _build_detailed_review(detailed_review: dict = None) -> str:
     if complaints:
         sections.append(f"[아쉬운 점 - 솔직하게 본문에 1줄 반영할 것]\n{complaints}")
 
+    # 예약 방법
+    reservation = detailed_review.get("reservation")
+    if reservation:
+        sections.append(f"[예약 방법 - 서론에서 자연스럽게 언급할 것]\n{reservation}")
+
+    # 방문 시간대
+    visit_time = detailed_review.get("visit_time")
+    if visit_time:
+        sections.append(f"[방문 시간대 - 서론 도입에 반영할 것]\n{visit_time}")
+
+    # 방문 인원
+    party_size = detailed_review.get("party_size")
+    if party_size:
+        sections.append(f"[방문 인원 - 서론에 반영, 양/구성 참고]\n{party_size}")
+
+    # 웨이팅
+    waiting = detailed_review.get("waiting")
+    if waiting:
+        sections.append(f"[웨이팅 - 서론 또는 매장 소개에 반영할 것]\n{waiting}")
+
+    # 음식 나오는 시간
+    food_wait = detailed_review.get("food_wait_time")
+    if food_wait:
+        sections.append(f"[음식 나오는 시간 - 본론에서 자연스럽게 언급할 것]\n{food_wait}")
+
+    # 총 결제금액
+    total_price = detailed_review.get("total_price")
+    if total_price:
+        sections.append(f"[총 결제금액 - 총평에서 가성비와 함께 반영할 것]\n{total_price}")
+
+    # 추천 조합/꿀팁
+    tip = detailed_review.get("tip")
+    if tip:
+        sections.append(f"[추천 조합/꿀팁 - 마무리 전에 독자에게 팁으로 제공할 것]\n{tip}")
+
     # 다음에 먹어볼 메뉴
     next_menu = detailed_review.get("next_menu")
     if next_menu:
         sections.append(f"[다음에 먹어볼 메뉴 - 마무리에 반영할 것]\n{next_menu}")
+
+    # 내돈내산
+    if detailed_review.get("own_money"):
+        sections.append("[내돈내산 - 서론 첫줄에 '내돈내산' 자연스럽게 언급할 것]")
 
     if not sections:
         return ""
