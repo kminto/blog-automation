@@ -210,11 +210,16 @@ if st.session_state.place_detail:
     if st.session_state.blog_result:
         render_blog_result()
 
-# === DB 수동 저장 ===
+# === DB 자동 저장 (입력값이 있을 때만) ===
 if is_db_available() and st.session_state.get("place_detail"):
-    if st.button("💾 중간 저장", use_container_width=True, key="btn_save_draft"):
-        draft_id = st.session_state.get("current_draft_id", "")
+    draft_id = st.session_state.get("current_draft_id", "")
+    # 아무 입력이라도 있으면 자동 저장 (빈 세션 덮어쓰기 방지)
+    has_any_input = any(
+        st.session_state.get(k, "").strip()
+        for k in ["input_ordered", "input_companion", "input_visit_reason",
+                   "sd_taste", "input_mood", "pr_revisit"]
+    )
+    if has_any_input:
         saved_id = save_draft(draft_id, st.session_state)
         if saved_id and saved_id != draft_id:
             st.session_state["current_draft_id"] = saved_id
-        st.toast("저장 완료!")
