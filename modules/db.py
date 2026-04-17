@@ -92,6 +92,8 @@ def save_draft(draft_id: str, session_state: dict) -> str:
         "pr_complaints": session_state.get("pr_complaints", ""),
         "pr_revisit": session_state.get("pr_revisit", ""),
         "pr_recommend": session_state.get("pr_recommend", ""),
+        "exterior": session_state.get("input_exterior", ""),
+        "side_menu": session_state.get("input_side_menu", ""),
     }
     # 빈 값 제거 후 저장
     detailed_filled = {k: v for k, v in detailed_fields.items() if v}
@@ -201,8 +203,15 @@ def restore_draft_to_session(draft: dict):
     # 세분화 후기 복원
     detailed = draft.get("detailed_review_inputs")
     if detailed and isinstance(detailed, dict):
+        # DB키 → 세션키 매핑 (input_ 접두사가 필요한 필드)
+        key_map = {
+            "parking": "input_parking", "access": "input_access",
+            "restroom": "input_restroom", "facilities": "input_facilities",
+            "exterior": "input_exterior", "side_menu": "input_side_menu",
+        }
         for key, value in detailed.items():
-            st.session_state[key] = value
+            session_key = key_map.get(key, key)
+            st.session_state[session_key] = value
 
 
 # === 포스팅 기록 ===

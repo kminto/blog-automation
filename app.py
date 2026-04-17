@@ -205,9 +205,11 @@ if st.session_state.place_detail:
     if st.session_state.blog_result:
         render_blog_result()
 
-# === DB 자동 저장 ===
+# === DB 수동 저장 ===
 if is_db_available() and st.session_state.get("place_detail"):
-    draft_id = st.session_state.get("current_draft_id", "")
-    saved_id = save_draft(draft_id, st.session_state)
-    if saved_id and saved_id != draft_id:
-        st.session_state["current_draft_id"] = saved_id
+    if st.button("💾 중간 저장", use_container_width=True, key="btn_save_draft"):
+        draft_id = st.session_state.get("current_draft_id", "")
+        saved_id = save_draft(draft_id, st.session_state)
+        if saved_id and saved_id != draft_id:
+            st.session_state["current_draft_id"] = saved_id
+        st.toast("저장 완료!")
