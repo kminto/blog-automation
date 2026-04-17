@@ -8,7 +8,7 @@ import pandas as pd
 
 from modules.validators import validate_env
 from modules.blog_advisor import get_today_topic
-from modules.pipeline import run_full_pipeline
+from modules.pipeline import run_full_pipeline, run_keyword_only, run_blog_only
 from modules.db import (
     is_db_available, save_draft, load_draft, list_drafts,
     delete_draft, restore_draft_to_session,
@@ -191,22 +191,6 @@ if st.session_state.place_detail:
         on_analyze=None,
         on_generate=run_full_pipeline,
     )
-
-    # 키워드 결과
-    if st.session_state.scored_keywords:
-        with st.expander(f"📊 키워드 분석 ({len(st.session_state.scored_keywords)}개)", expanded=False):
-            display_data = [
-                {
-                    "키워드": kw.get("keyword", ""),
-                    "검색량": kw.get("search_volume", 0),
-                    "경쟁도": kw.get("competition", ""),
-                    "트렌드": kw.get("trend", ""),
-                    "점수": kw.get("score", 0),
-                }
-                for kw in st.session_state.scored_keywords
-            ]
-            df = pd.DataFrame(display_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
 
     # 블로그 결과
     if st.session_state.blog_result:

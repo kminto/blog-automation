@@ -321,27 +321,94 @@ def render_place_detail(on_analyze, on_generate):
         )
         st.checkbox("내돈내산", key="input_own_money", value=True)
 
-    # === 🚀 생성 버튼 ===
-    btn_generate = st.button(
-        "🚀 키워드 분석 + 본문 생성",
-        use_container_width=True,
-        type="primary",
-        key="btn_full_pipeline",
-    )
+    # === 1단계: 키워드 분석 ===
+    has_keywords = st.session_state.get("scored_keywords") is not None
 
-    # === 생성 실행 ===
-    if btn_generate:
-        region_list = parse_comma_separated(st.session_state.get("input_regions", ""))
-        menu_list = parse_comma_separated(st.session_state.get("input_menus", ""))
-        if not region_list or not menu_list:
-            st.error("지역과 메뉴를 최소 하나씩 입력해주세요.")
-        else:
+    if not has_keywords:
+        btn_keyword = st.button(
+            "🔍 1단계: 키워드 분석",
+            use_container_width=True,
+            type="primary",
+            key="btn_keyword_analysis",
+        )
+        if btn_keyword:
+            region_list = parse_comma_separated(st.session_state.get("input_regions", ""))
+            menu_list = parse_comma_separated(st.session_state.get("input_menus", ""))
+            if not region_list or not menu_list:
+                st.error("지역과 메뉴를 최소 하나씩 입력해주세요.")
+            else:
+                from modules.pipeline import run_keyword_only
+                user_context = " ".join([
+                    st.session_state.get("input_companion", ""),
+                    st.session_state.get("input_mood", ""),
+                    st.session_state.get("input_ordered", ""),
+                    st.session_state.get("input_visit_reason", ""),
+                ])
+                run_keyword_only(region_list, menu_list, user_context)
+                st.rerun()
+
+    # === 키워드 선택 ===
+    if has_keywords:
+        st.subheader("📊 키워드 선택")
+        st.caption("상위 노출에 사용할 키워드를 선택하세요 (3개 추천)")
+
+        keywords = st.session_state.scored_keywords
+        # 기본 선택: 상위 3개
+        if "selected_keywords" not in st.session_state:
+            st.session_state["selected_keywords"] = [
+                kw["keyword"] for kw in keywords[:3]
+            ]
+
+        selected = []
+        for i, kw in enumerate(keywords):
+            cols = st.columns([0.5, 3, 1.5, 1, 1])
+            with cols[0]:
+                checked = st.checkbox(
+                    "", value=(kw["keyword"] in st.session_state["selected_keywords"]),
+                    key=f"kw_check_{i}", label_visibility="collapsed",
+                )
+            with cols[1]:
+                st.text(kw["keyword"])
+            with cols[2]:
+                st.text(f"검색량 {kw.get('search_volume', 0):,}")
+            with cols[3]:
+                st.text(kw.get("competition", ""))
+            with cols[4]:
+                st.text(f"{kw.get('score', 0):,.0f}점")
+            if checked:
+                selected.append(kw)
+
+        st.session_state["selected_keywords"] = [kw["keyword"] for kw in selected]
+
+        if not selected:
+            st.warning("최소 1개 키워드를 선택해주세요.")
+
+        # 키워드 재분석 버튼
+        col_re, col_gen = st.columns(2)
+        with col_re:
+            if st.button("🔄 키워드 재분석", use_container_width=True, key="btn_re_keyword"):
+                st.session_state["scored_keywords"] = None
+                st.session_state.pop("selected_keywords", None)
+                st.rerun()
+        with col_gen:
+            btn_generate = st.button(
+                "✍️ 2단계: 본문 생성",
+                use_container_width=True,
+                type="primary",
+                key="btn_generate_blog",
+                disabled=len(selected) == 0,
+            )
+
+        # === 2단계: 본문 생성 ===
+        if btn_generate and selected:
+            # 선택된 키워드만 세션에 저장
+            st.session_state.scored_keywords = selected
+
+            region_list = parse_comma_separated(st.session_state.get("input_regions", ""))
+            menu_list = parse_comma_separated(st.session_state.get("input_menus", ""))
             detailed_review = _build_detailed_review_from_form()
 
-            # 매장 정보를 memo에 자동 조합
             memo = build_auto_memo(info)
-
-            # 매장 입력 키워드를 mood에 조합
             mood_parts = []
             for key, label in [
                 ("input_mood", "분위기"), ("input_exterior", "외관"),
@@ -353,20 +420,17 @@ def render_place_detail(on_analyze, on_generate):
                     mood_parts.append(f"{label}: {val}")
             full_mood = ", ".join(mood_parts)
 
-            # 사이드 메뉴를 ordered에 추가
             ordered = st.session_state.get("input_ordered", "")
             side = st.session_state.get("input_side_menu", "")
             if side and side.strip():
                 ordered += f"\n{side.strip()} - 사이드"
 
-            on_generate(
+            from modules.pipeline import run_blog_only
+            run_blog_only(
                 info["name"], region_list, menu_list,
                 st.session_state.get("input_companion", ""),
-                full_mood,
-                memo,
-                ordered,
-                "",  # my_review
-                None,  # photos
+                full_mood, memo, ordered,
+                place_detail=info,
                 detailed_review=detailed_review,
                 visit_reason=st.session_state.get("input_visit_reason", ""),
             )

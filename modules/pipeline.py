@@ -337,7 +337,25 @@ def _run_blog_generation(
         st.warning("**입력 정보가 부족하여 품질 점수가 낮습니다.**\n아래 항목을 보완 후 다시 생성해주세요:")
         for m in missing:
             st.caption(f"  • {m}")
-        st.info("💡 **팁**: '주문 메뉴 한줄평'을 더 상세히 적으면 글자수와 품질이 올라갑니다.")
+
+        # 구체적 입력 보완 팁
+        tips = []
+        if char_count < 1500:
+            tips.append("'주문 메뉴 · 한줄평'에 각 메뉴별 맛/식감/향을 2~3줄씩 작성")
+            tips.append("'맛 평가'에 전체적인 간, 소스, 특이한 점을 상세히 기술")
+            tips.append("'추천 조합 · 꿀팁'에 메뉴 조합이나 먹는 순서를 추가")
+        if seo_result["grade"] == "C":
+            tips.append("'지역 · 메뉴 키워드'가 정확한지 확인 (예: '강남역' vs '강남')")
+        if engage_result["grade"] == "C":
+            tips.append("'방문 계기'에 스토리 추가 (예: '친구가 3번이나 추천해서')")
+            tips.append("'아쉬운 점'을 솔직하게 작성하면 체류시간이 올라갑니다")
+            tips.append("'음식 나오는 시간', '웨이팅' 등 디테일을 채워주세요")
+        if not tips:
+            tips.append("각 입력 항목을 최대한 상세히 채워주세요")
+
+        with st.expander("💡 품질 올리는 팁", expanded=True):
+            for tip in tips:
+                st.caption(f"  ✏️ {tip}")
 
         # 미달이어도 참고용으로 본문은 보여줌 (수정 가능하도록)
         st.session_state.blog_result = blog_text
@@ -380,6 +398,68 @@ def _run_blog_generation(
     return True
 
 
+def run_keyword_only(
+    region_list: list[str],
+    menu_list: list[str],
+    user_context: str = "",
+):
+    """1단계: 키워드 분석만 실행. 결과를 세션에 저장."""
+    progress = st.progress(0)
+    status = st.status("🔍 키워드 분석 중...", expanded=True)
+
+    _run_keyword_analysis(status, progress, region_list, menu_list, user_context)
+
+    progress.progress(100)
+    status.update(label="🔍 키워드 분석 완료! 아래에서 키워드를 선택하세요.", state="complete")
+
+
+def run_blog_only(
+    restaurant_name: str,
+    region_list: list[str],
+    menu_list: list[str],
+    companion: str,
+    mood: str,
+    memo: str,
+    ordered_menus: str = "",
+    my_review: str = "",
+    place_detail: dict = None,
+    detailed_review: dict = None,
+    visit_reason: str = "",
+):
+    """2단계: 선택된 키워드로 본문 생성. 키워드 API 재호출 없음."""
+    progress = st.progress(0)
+    status = st.status("✍️ 본문 생성 중...", expanded=True)
+    progress.progress(10)
+
+    # place_detail 자동 수집 (세션에 없으면)
+    if place_detail is None:
+        place_detail = st.session_state.get("place_detail")
+    if place_detail is None:
+        from modules.place_detail import fetch_place_detail
+        status.update(label="📍 운영정보 자동 수집 중...")
+        place_detail = fetch_place_detail(name=restaurant_name)
+        if place_detail:
+            st.session_state["place_detail"] = place_detail
+
+    progress.progress(20)
+
+    success = _run_blog_generation(
+        status, progress,
+        restaurant_name, region_list, menu_list,
+        companion, mood, memo,
+        ordered_menus, my_review, "",
+        place_detail=place_detail,
+        detailed_review=detailed_review,
+        visit_reason=visit_reason,
+    )
+
+    if success:
+        status.update(label="🎉 블로그 글 생성 완료!", state="complete")
+        st.success("블로그 글 생성 완료! 아래에서 확인하세요.")
+    else:
+        status.update(label="❌ 생성 실패", state="error")
+
+
 def run_full_pipeline(
     restaurant_name: str,
     region_list: list[str],
@@ -394,7 +474,7 @@ def run_full_pipeline(
     detailed_review: dict = None,
     visit_reason: str = "",
 ):
-    """사진분석 → 키워드분석 → 본문생성 원클릭 파이프라인."""
+    """사진분석 → 키워드분석 → 본문생성 원클릭 파이프라인 (레거시 호환)."""
     progress = st.progress(0)
     status = st.status("🚀 블로그 글 생성 시작...", expanded=True)
 
@@ -406,7 +486,6 @@ def run_full_pipeline(
     photo_context = _run_photo_analysis(status, progress, uploaded_photos or [])
 
     # 2. 키워드 분석
-    # 사용자 입력 전체를 컨텍스트로 조합 (키워드 필터링에 사용)
     user_context = " ".join([
         companion or "", mood or "", memo or "",
         ordered_menus or "", my_review or "", visit_reason or "",
@@ -414,7 +493,6 @@ def run_full_pipeline(
     _run_keyword_analysis(status, progress, region_list, menu_list, user_context)
 
     # 3. 본문 생성
-    # place_detail 자동 수집 (세션에 없으면)
     if place_detail is None:
         place_detail = st.session_state.get("place_detail")
     if place_detail is None:
